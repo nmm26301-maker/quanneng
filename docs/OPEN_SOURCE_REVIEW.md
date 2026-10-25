@@ -24,3 +24,5 @@
 参考 moneytoo/Player（Unlicense，2026-10-22 有维护提交）的独立主播放键、集中传输控制和轻点显示控制的设计。该项目依赖 Media3/ExoPlayer，扩大依赖和切换媒体栈不在本次 UI 修复范围；保留现有 VideoView，使用 Android 官方 WindowInsetsController（API 30+）与旧系统沉浸标志实现全屏。Android 官方文档说明系统栏可由边缘手势临时唤出，桌面窗口的标题栏也可能保留，因此不拦截系统导航手势。未复制第三方播放器源码。颜色、矢量图标和布局由本项目实现。
 
 官方资料：https://developer.android.com/develop/ui/views/layout/immersive ；项目：https://github.com/moneytoo/Player 。
+
+Android CTS（Apache-2.0）的 DisableImmersiveModeConfirmationRule 将 IMMERSIVE_MODE_CONFIRMATIONS 设为 confirmed，以免系统教学窗口干扰被测应用的输入。CI 采用相同的隔离模拟器前置条件，未在应用中写入这一设置。参考：https://android.googlesource.com/platform/cts/+/0c55e5e18e604b0b890dc73e2d63a0cd6f2b1159/tests/inputmethod/util/src/android/view/inputmethod/cts/util/DisableImmersiveModeConfirmationRule.java 。

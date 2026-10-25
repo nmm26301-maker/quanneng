@@ -50,7 +50,7 @@ public final class PlaybackSmoke extends Instrumentation {
     private void exerciseFullscreen(Activity activity)throws Exception{
         runOnMainSync(()->activity.findViewById(1004).performClick());SystemClock.sleep(250);
         long paused=state(activity)[1];SystemClock.sleep(300);if(Math.abs(state(activity)[1]-paused)>100)throw new AssertionError("Pause button did not pause");
-        snapshot("PORTRAIT");runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,true);dismissFullscreenHint(activity);
+        snapshot("PORTRAIT");runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,true);
         AtomicReference<Boolean> pausedStill=new AtomicReference<>(false);runOnMainSync(()->{VideoView v=activity.findViewById(1000);pausedStill.set(!v.isPlaying());});
         if(!pausedStill.get()||Math.abs(state(activity)[1]-paused)>500)throw new AssertionError("Fullscreen lost paused playback position");
         SystemClock.sleep(1200);waitForIdleSync();snapshot("LANDSCAPE");report("Fullscreen layout and pause position preserved");runOnMainSync(()->activity.findViewById(1004).performClick());SystemClock.sleep(4500);
@@ -66,14 +66,9 @@ public final class PlaybackSmoke extends Instrumentation {
         try(ParcelFileDescriptor command=getUiAutomation().executeShellCommand("input tap "+p[0]+" "+p[1]);java.io.FileInputStream output=new java.io.FileInputStream(command.getFileDescriptor())){byte[] buffer=new byte[256];while(output.read(buffer)!=-1){}}
         SystemClock.sleep(200);waitForIdleSync();
     }
-    private void dismissFullscreenHint(Activity activity)throws Exception{
-        long deadline=SystemClock.elapsedRealtime()+5500;
-        while(SystemClock.elapsedRealtime()<deadline){android.view.accessibility.AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();if(root!=null){for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText("Got it")){if("com.android.systemui".contentEquals(node.getPackageName()==null?"":node.getPackageName())&&node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)){report("Acknowledged Android first-fullscreen education");SystemClock.sleep(500);return;}}}SystemClock.sleep(100);}
-        AtomicReference<Boolean> focused=new AtomicReference<>(false);runOnMainSync(()->focused.set(activity.getWindow().getDecorView().hasWindowFocus()));if(!focused.get())throw new AssertionError("A system window still covers fullscreen player");
-    }
     private void awaitLayout(Activity activity,boolean full)throws Exception{
         long deadline=SystemClock.elapsedRealtime()+10000;
-        while(SystemClock.elapsedRealtime()<deadline){AtomicReference<Boolean> ok=new AtomicReference<>(false);runOnMainSync(()->{try{View root=activity.getWindow().getDecorView(),button=activity.findViewById(1005),details=activity.findViewById(1008);boolean actual=(Boolean)field(activity,"fullscreen");int[] xy=new int[2];button.getLocationOnScreen(xy);float density=activity.getResources().getDisplayMetrics().density;ok.set(actual==full&&(root.getWidth()>root.getHeight())==full&&details.getVisibility()==(full?View.GONE:View.VISIBLE)&&button.getWidth()>=47*density&&button.getHeight()>=47*density&&xy[0]>=0&&xy[0]+button.getWidth()<=root.getWidth());}catch(Exception e){}});if(ok.get())return;SystemClock.sleep(100);}
+        while(SystemClock.elapsedRealtime()<deadline){AtomicReference<Boolean> ok=new AtomicReference<>(false);runOnMainSync(()->{try{View root=activity.getWindow().getDecorView(),button=activity.findViewById(1005),details=activity.findViewById(1008);boolean actual=(Boolean)field(activity,"fullscreen");int[] xy=new int[2];button.getLocationOnScreen(xy);float density=activity.getResources().getDisplayMetrics().density;ok.set(root.hasWindowFocus()&&actual==full&&(root.getWidth()>root.getHeight())==full&&details.getVisibility()==(full?View.GONE:View.VISIBLE)&&button.getWidth()>=47*density&&button.getHeight()>=47*density&&xy[0]>=0&&xy[0]+button.getWidth()<=root.getWidth());}catch(Exception e){}});if(ok.get())return;SystemClock.sleep(100);}
         throw new AssertionError("Player orientation, full-width layout, or 48dp fullscreen target incorrect: "+full);
     }
     private void snapshot(String label)throws Exception{

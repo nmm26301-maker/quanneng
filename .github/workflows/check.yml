@@ -69,6 +69,8 @@ jobs:
           script: |
             adb install -r "$RUNNER_TEMP/Quanneng-debug.apk"
             adb install -r "$RUNNER_TEMP/Quanneng-tests.apk"
+            # Same precondition as Android CTS: test app controls after OS education.
+            adb shell settings put secure immersive_mode_confirmations confirmed
             adb logcat -c
             timeout 180s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.PlaybackSmoke | tee "$RUNNER_TEMP/playback-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/playback-logcat.txt"
