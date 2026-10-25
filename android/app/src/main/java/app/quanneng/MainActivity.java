@@ -29,6 +29,7 @@ public final class MainActivity extends Activity {
     private WebChromeClient.CustomViewCallback fullCallback;
     private ValueCallback<Uri[]> picker;
     private final ExecutorService worker = Executors.newFixedThreadPool(2);
+    private ImportedVideoController imported;
     private String pendingUrl;
     private boolean pipRequested = false;
     private boolean foreground = false;
@@ -41,6 +42,7 @@ public final class MainActivity extends Activity {
         setContentView(root);
         web = new WebView(this);
         root.addView(web, new FrameLayout.LayoutParams(-1, -1));
+        imported = new ImportedVideoController(this);
         configureWeb();
         receiveIntent(getIntent());
         web.loadUrl(ORIGIN + "index.html");
@@ -129,6 +131,7 @@ public final class MainActivity extends Activity {
     private void toast(String text) { runOnUiThread(()->Toast.makeText(this,text,Toast.LENGTH_LONG).show()); }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
+        if (imported != null && imported.onActivityResult(request,result,data)) return;
         if (request == PICK_NATIVE_VIDEO && result == RESULT_OK && data != null) {
             ArrayList<String> queue=new ArrayList<>();
             if(data.getClipData()!=null){for(int i=0;i<data.getClipData().getItemCount();i++)queue.add(data.getClipData().getItemAt(i).getUri().toString());}
@@ -160,10 +163,22 @@ public final class MainActivity extends Activity {
         String mediaContext=intent.getStringExtra("mediaContext");
         if(mediaContext!=null&&mediaContext.length()<65536){try{JSONObject c=new JSONObject(mediaContext);String u=c.getString("url");if(isHttps(u)){mediaContexts.put(u,c);if(mediaContexts.size()>32)mediaContexts.remove(mediaContexts.keySet().iterator().next());}}catch(JSONException ignored){}}
         if (Intent.ACTION_SEND.equals(intent.getAction())) {
+            Uri shared = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+            if(shared!=null&&"content".equals(shared.getScheme())){
+                startActivityForResult(new Intent(this,SystemPlayerActivity.class).setData(shared).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),NATIVE_PLAYER);
+                return;
+            }
             String text = intent.getStringExtra(Intent.EXTRA_TEXT);
             if (text != null) {
                 java.util.regex.Matcher m = java.util.regex.Pattern.compile("https://[^\\s<>\\\"]+").matcher(text);
                 if (m.find()) pendingUrl = m.group();
+            }
+        } else if (Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())) {
+            ArrayList<Uri> shared=intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            if(shared!=null&&!shared.isEmpty()){
+                ArrayList<String> queue=new ArrayList<>();
+                for(Uri uri:shared)if(uri!=null&&"content".equals(uri.getScheme())&&queue.size()<100)queue.add(uri.toString());
+                if(!queue.isEmpty())startActivityForResult(new Intent(this,SystemPlayerActivity.class).setData(Uri.parse(queue.get(0))).putStringArrayListExtra("queue",queue).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),NATIVE_PLAYER);
             }
         } else if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
             Uri uri = intent.getData();
@@ -187,6 +202,7 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy() {
         if (picker != null) picker.onReceiveValue(null);
         worker.shutdownNow();
+        if(imported!=null)imported.close();
         web.removeJavascriptInterface("Quanneng"); web.destroy(); super.onDestroy();
     }
     public final class Bridge {
@@ -197,6 +213,7 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void playMedia(String raw) {runOnUiThread(()->{if(!trusted()||raw==null||raw.length()>100000)return;try{launchMedia(new JSONObject(raw));}catch(Exception error){toast("视频地址无效，请重新打开原网页");}});}
         @JavascriptInterface public void openLocalVideo() {runOnUiThread(()->{if(!trusted())return;try{Intent select=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("video/*").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);startActivityForResult(select,PICK_NATIVE_VIDEO);}catch(ActivityNotFoundException error){toast("系统未找到文件选择器");}});}
 
+        @JavascriptInterface public void importVideoToPhone() {runOnUiThread(()->{if(trusted()&&imported!=null)imported.begin();});}
     }
     private void launchMedia(JSONObject request) throws JSONException {
         String url=request.getString("url");if(!isHttps(url)){toast("请使用 HTTPS 视频地址");return;}
