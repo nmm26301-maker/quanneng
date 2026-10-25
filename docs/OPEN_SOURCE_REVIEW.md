@@ -14,3 +14,7 @@
 设计规则在 `design-system/quanneng/MASTER.md`。UI UX Pro Max 的 OLED暗色、明确主操作、键盘焦点、48dp点击区域与移动端导航建议已应用；强调色保留已有浅绿以延续用户认知。无需外部字体请求。
 
 第三方许可证保留在 `dist/vendor/HLS-LICENSE`；前端 npm 依赖许可证见各包，项目安装清单固定版本并提交锁文件。React、React DOM、Tailwind、Vite、Phosphor Icons 为 MIT，hls.js 为 Apache-2.0。编译备用工具 Eclipse JDT ECJ 为 EPL-2.0，仅构建使用，不随 APK 分发。
+
+### v0.2.1 回归测试方案
+
+采用 ReactiveCircus/android-emulator-runner（Apache-2.0，提交 ed009f5318f15b1cf93a191b856c4f1748a2d4c1）在 GitHub Linux 临时 runner 上运行加速 Android 模拟器；以 android-actions/setup-android（MIT，提交 035682743ab223ec9c6169af09811dff8247e520）准备官方 SDK 工具。前者依赖可用 KVM，启动和镜像下载需要时间；后者解决 runner 未预装 sdkmanager 的问题。使用 Android 官方 Instrumentation 和 VideoView API，不引入生产环境第三方播放器源码。VideoView 的带请求头 setVideoURI 接口用于媒体来源上下文传递。

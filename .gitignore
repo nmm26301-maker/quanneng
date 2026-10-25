@@ -7,3 +7,4 @@ android/build/
 *.idsig
 __pycache__/
 out/
+android/tests/assets/*.mp4

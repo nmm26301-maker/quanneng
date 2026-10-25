@@ -21,6 +21,9 @@ import java.util.concurrent.*;
 public final class MainActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net/assets/";
     private static final int PICK_FILE = 41;
+    private static final int PICK_NATIVE_VIDEO = 42;
+    private static final int NATIVE_PLAYER = 43;
+    private final Map<String,JSONObject> mediaContexts = new LinkedHashMap<>();
     private WebView web;
     private FrameLayout root;
     private View fullscreen;
@@ -31,6 +34,8 @@ public final class MainActivity extends Activity {
     private final Set<String> cancelled = ConcurrentHashMap.newKeySet();
     private String pendingUrl;
     private boolean pipRequested = false;
+    private boolean foreground = false;
+    private long mediaRequest = 0;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -47,6 +52,8 @@ public final class MainActivity extends Activity {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(false);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
@@ -128,6 +135,17 @@ public final class MainActivity extends Activity {
     private void toast(String text) { runOnUiThread(()->Toast.makeText(this,text,Toast.LENGTH_LONG).show()); }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
+        if (request == PICK_NATIVE_VIDEO && result == RESULT_OK && data != null) {
+            ArrayList<String> queue=new ArrayList<>();
+            if(data.getClipData()!=null){for(int i=0;i<data.getClipData().getItemCount();i++)queue.add(data.getClipData().getItemAt(i).getUri().toString());}
+            else if(data.getData()!=null)queue.add(data.getData().toString());
+            if(!queue.isEmpty())startActivityForResult(new Intent(this,SystemPlayerActivity.class).setData(Uri.parse(queue.get(0))).putStringArrayListExtra("queue",queue).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),NATIVE_PLAYER);
+        }
+        if (request == NATIVE_PLAYER && data != null && trusted()) {
+            try { JSONObject resultData=new JSONObject();resultData.put("url",data.getStringExtra("url"));resultData.put("position",data.getIntExtra("position",0)/1000.0);
+                web.evaluateJavascript("window.dispatchEvent(new CustomEvent('quanneng-playback',{detail:"+resultData.toString()+"}))",null);
+            } catch(JSONException ignored) {}
+        }
         if (request == PICK_FILE && picker != null) {
             picker.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result,data)); picker = null;
         }
@@ -141,6 +159,8 @@ public final class MainActivity extends Activity {
     }
     private void receiveIntent(Intent intent) {
         if (intent == null) return;
+        String mediaContext=intent.getStringExtra("mediaContext");
+        if(mediaContext!=null&&mediaContext.length()<65536){try{JSONObject c=new JSONObject(mediaContext);String u=c.getString("url");if(isHttps(u)){mediaContexts.put(u,c);if(mediaContexts.size()>32)mediaContexts.remove(mediaContexts.keySet().iterator().next());}}catch(JSONException ignored){}}
         if (Intent.ACTION_SEND.equals(intent.getAction())) {
             String text = intent.getStringExtra(Intent.EXTRA_TEXT);
             if (text != null) {
@@ -149,14 +169,16 @@ public final class MainActivity extends Activity {
             }
         } else if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
             Uri uri = intent.getData();
-            if ("content".equals(uri.getScheme())) startActivity(new Intent(this,SystemPlayerActivity.class).setData(uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+            if ("content".equals(uri.getScheme())) startActivityForResult(new Intent(this,SystemPlayerActivity.class).setData(uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),NATIVE_PLAYER);
         }
     }
     @Override public void onBackPressed() {
         if (fullscreen != null) { hideFullscreen(); return; }
         web.evaluateJavascript("window.quannengBack?window.quannengBack():false", result->{if (!"true".equals(result)) MainActivity.super.onBackPressed();});
     }
+    @Override protected void onResume(){super.onResume();foreground=true;}
     @Override protected void onPause() {
+        foreground=false;
         if (!pipRequested && !isInPictureInPictureMode()) web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause())",null);
         super.onPause();
     }
@@ -173,7 +195,10 @@ public final class MainActivity extends Activity {
     public final class Bridge {
         @JavascriptInterface public void openWebsite(String url) { runOnUiThread(()->{if(trusted())openBrowser(url);}); }
         @JavascriptInterface public void enterPip() { runOnUiThread(()->{if(!trusted())return;try{pipRequested=true;web.evaluateJavascript("document.documentElement.classList.add('pip-mode')",null);if(!enterPictureInPictureMode(new PictureInPictureParams.Builder().setAspectRatio(new Rational(16,9)).build()))throw new IllegalStateException();}catch(RuntimeException e){pipRequested=false;web.evaluateJavascript("document.documentElement.classList.remove('pip-mode')",null);toast("此设备不支持画中画");}}); }
-        @JavascriptInterface public void systemPlay(String url) { runOnUiThread(()->{if(trusted()&&isHttps(url))startActivity(new Intent(MainActivity.this,SystemPlayerActivity.class).setData(Uri.parse(url)));}); }
+        @JavascriptInterface public void systemPlay(String url) { runOnUiThread(()->{if(trusted()&&isHttps(url)){try{JSONObject request=new JSONObject();request.put("url",url);launchMedia(request);}catch(JSONException ignored){}}}); }
+        @JavascriptInterface public void playMedia(String raw) {runOnUiThread(()->{if(!trusted()||raw==null||raw.length()>100000)return;try{launchMedia(new JSONObject(raw));}catch(Exception error){toast("视频地址无效，请重新打开原网页");}});}
+        @JavascriptInterface public void openLocalVideo() {runOnUiThread(()->{if(!trusted())return;try{Intent select=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("video/*").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);startActivityForResult(select,PICK_NATIVE_VIDEO);}catch(ActivityNotFoundException error){toast("系统未找到文件选择器");}});}
+
         @JavascriptInterface public void requestAI(String value) {
             runOnUiThread(()->{if(trusted()&&value!=null&&value.length()<300000)worker.execute(()->callAI(value));});
         }
@@ -181,6 +206,32 @@ public final class MainActivity extends Activity {
             if (id == null) return;
             cancelled.add(id); HttpURLConnection c=connections.remove(id); if(c!=null)c.disconnect();
         }
+    }
+    private void launchMedia(JSONObject request) throws JSONException {
+        String url=request.getString("url");if(!isHttps(url)){toast("请使用 HTTPS 视频地址");return;}
+        JSONObject context=mediaContexts.get(url);
+        Intent intent=new Intent(this,SystemPlayerActivity.class).setData(Uri.parse(url));
+        if(context!=null){intent.putExtra("headers",context.optJSONObject("headers")==null?"{}":context.optJSONObject("headers").toString());intent.putExtra("sourcePage",context.optString("page",""));}
+        String cookie=android.webkit.CookieManager.getInstance().getCookie(url);
+        if(cookie!=null)intent.putExtra("cookie",cookie);
+        intent.putExtra("userAgent",web.getSettings().getUserAgentString());
+        intent.putExtra("position",Math.max(0,request.optInt("position",0)));
+        intent.putExtra("autoNext",request.optBoolean("autoNext",true));
+        JSONArray values=request.optJSONArray("queue");ArrayList<String> queue=new ArrayList<>();
+        if(values!=null){for(int i=0;i<Math.min(100,values.length());i++){String u=values.optString(i,"");if(isHttps(u))queue.add(u);}}
+        intent.putStringArrayListExtra("queue",queue);
+        boolean known=context!=null||java.util.regex.Pattern.compile("(?i)\\.(mp4|m3u8|webm|m4v|mov)(?:[?#]|$)").matcher(url).find();
+        if(known){startActivityForResult(intent,NATIVE_PLAYER);return;}
+        final long token=++mediaRequest;
+        final String requestAgent=web.getSettings().getUserAgentString();
+        worker.execute(()->{
+            boolean html=false;HttpURLConnection probe=null;
+            try{probe=(HttpURLConnection)new URL(url).openConnection();probe.setInstanceFollowRedirects(false);probe.setConnectTimeout(8000);probe.setReadTimeout(8000);probe.setRequestProperty("Range","bytes=0-511");probe.setRequestProperty("User-Agent",requestAgent);if(cookie!=null&&cookie.indexOf('\r')<0&&cookie.indexOf('\n')<0)probe.setRequestProperty("Cookie",cookie);
+                int status=probe.getResponseCode();String type=probe.getContentType();html=status>=200&&status<300&&type!=null&&(type.toLowerCase(Locale.ROOT).contains("text/html")||type.toLowerCase(Locale.ROOT).contains("application/xhtml"));
+            }catch(Exception ignored){}finally{if(probe!=null)probe.disconnect();}
+            final boolean webpage=html;
+            runOnUiThread(()->{if(isFinishing()||!foreground||token!=mediaRequest)return;if(webpage){toast("这是网页地址，请在网页内开始播放后点击发现视频");openBrowser(url);}else startActivityForResult(intent,NATIVE_PLAYER);});
+        });
     }
     private void callAI(String raw) {
         String id = ""; HttpURLConnection connection=null;

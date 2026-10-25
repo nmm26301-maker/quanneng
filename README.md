@@ -1,6 +1,6 @@
-# 全能 v0.2.0
+# 全能 v0.2.1
 
-安卓播放器 + AI 工作台 + 发现与方案页。React 19 + Tailwind CSS 4 + Android WebView 离线打包，包含原生系统视频播放后备页。
+安卓播放器 + AI 工作台 + 发现与方案页。React 19 + Tailwind CSS 4 + Android WebView 离线打包，包含默认原生视频播放页。
 
 - 本地视频、HTTPS 视频直链、开放 M3U8、网页媒体发现。
 - 前后 10秒/1分钟/10分钟、A—B 区间循环、倍速、字幕与播放列表。

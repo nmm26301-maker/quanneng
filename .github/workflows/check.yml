@@ -8,6 +8,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,6 +23,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Check media request header policy
+        run: |
+          mkdir -p android/build/header-tests
+          javac -d android/build/header-tests android/app/src/main/java/app/quanneng/PlaybackHeaders.java android/tests/PlaybackHeadersCheck.java
+          java -cp android/build/header-tests PlaybackHeadersCheck
       - name: Prepare Android SDK paths
         shell: bash
         run: |
@@ -37,3 +43,38 @@ jobs:
         with:
           name: Quanneng-debug
           path: ${{ runner.temp }}/Quanneng-debug.apk
+
+      - name: Download public playback fixture and build instrumentation APK
+        run: |
+          curl --fail --location --retry 3 https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4 -o android/tests/assets/flower.mp4
+          python3 android/tools/build-tests.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-tests.apk"
+      - name: Set up Android emulator tools
+        uses: android-actions/setup-android@035682743ab223ec9c6169af09811dff8247e520
+        with:
+          cmdline-tools-version: '12266719'
+      - name: Enable emulator acceleration on the ephemeral runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify actual Android network and content URI playback
+        uses: reactivecircus/android-emulator-runner@ed009f5318f15b1cf93a191b856c4f1748a2d4c1
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-boot-timeout: 300
+          script: |
+            adb install -r "$RUNNER_TEMP/Quanneng-debug.apk"
+            adb install -r "$RUNNER_TEMP/Quanneng-tests.apk"
+            adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.PlaybackSmoke | tee "$RUNNER_TEMP/playback-smoke.txt"
+            grep -q QUANNENG_SMOKE_OK "$RUNNER_TEMP/playback-smoke.txt"
+      - name: Save Android playback test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-playback-smoke
+          path: ${{ runner.temp }}/playback-smoke.txt
+          if-no-files-found: ignore
