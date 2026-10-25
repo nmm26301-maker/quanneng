@@ -31,7 +31,7 @@ python3 android/tools/build.py --sdk /path/to/sdk-unpacked --keystore /private/q
 
 已完成核心单测、生产构建、Java 编译、Dex 转换、资源打包及 APK 签名校验；浏览器验证覆盖视频播放、AB循环、倍速、页面切换和缺少 AI 配置时的提示。尚未在真实安卓手机上运行验收，未使用真实 API Key 测试模型响应。不要把编译通过等同于所有机型兼容。
 
-## v0.2.2 网络播放修复
+## v0.2.1 网络播放修复
 
 安卓网络视频默认进入原生播放页，避免以网页跨域策略加载媒体。网页发现媒体时，Referer、User-Agent 及该媒体 URL 适用的 Cookie 只在本机内存转交；Cookie 不写入播放列表。没有明确视频后缀的普通网页地址会先检查 Content-Type，HTML 转入网页发现流程。原生页保留快进、倍速、AB 循环、文件 URI、字幕导入及可用时的网页回退；加密、失效地址与设备不支持的编码仍需分别处理。
 
