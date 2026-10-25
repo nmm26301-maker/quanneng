@@ -55,16 +55,20 @@ public final class PlaybackSmoke extends Instrumentation {
         if(!pausedStill.get()||Math.abs(state(activity)[1]-paused)>500)throw new AssertionError("Fullscreen lost paused playback position");
         SystemClock.sleep(1200);waitForIdleSync();snapshot("LANDSCAPE");report("Fullscreen layout and pause position preserved");runOnMainSync(()->activity.findViewById(1004).performClick());SystemClock.sleep(4500);
         AtomicReference<Boolean> hidden=new AtomicReference<>(false);runOnMainSync(()->hidden.set(activity.findViewById(1006).getVisibility()==View.GONE));if(!hidden.get())throw new AssertionError("Fullscreen controls did not auto-hide");
-        report("Fullscreen controls auto-hidden");tapVideo(activity);AtomicReference<Boolean> visible=new AtomicReference<>(false);runOnMainSync(()->visible.set(activity.findViewById(1006).getVisibility()==View.VISIBLE));if(!visible.get())throw new AssertionError("Video tap did not restore controls");
+        report("Fullscreen controls auto-hidden");tapVideo(activity);AtomicReference<Boolean> visible=new AtomicReference<>(false);runOnMainSync(()->visible.set(activity.findViewById(1006).getVisibility()==View.VISIBLE));if(!visible.get()){snapshot("AFTER_TAP");diagnoseTouch(activity);throw new AssertionError("Video tap did not restore controls");}
         report("Actual touchscreen restored controls");long backTime=SystemClock.uptimeMillis();getUiAutomation().injectInputEvent(new KeyEvent(backTime,backTime,KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_BACK,0),true);getUiAutomation().injectInputEvent(new KeyEvent(backTime,backTime+50,KeyEvent.ACTION_UP,KeyEvent.KEYCODE_BACK,0),true);awaitLayout(activity,false);if(activity.isFinishing())throw new AssertionError("System back closed player instead of exiting fullscreen");
         awaitPlayable(activity);
     }
     private void tapVideo(Activity activity)throws Exception{
         AtomicReference<int[]> point=new AtomicReference<>();runOnMainSync(()->{View target=activity.findViewById(1010);int[] xy=new int[2];target.getLocationOnScreen(xy);point.set(new int[]{xy[0]+target.getWidth()/2,xy[1]+target.getHeight()/2});});
-        int[] p=point.get();report("Touchscreen target: "+p[0]+","+p[1]);
+        int[] p=point.get();report("Touchscreen target: "+p[0]+","+p[1]);runOnMainSync(()->activity.findViewById(1010).setOnTouchListener((v,e)->{report("Received touch action "+e.getAction()+" at "+e.getRawX()+","+e.getRawY());return false;}));
         // Android shell input uses the platform touchscreen source and display mapping.
         try(ParcelFileDescriptor command=getUiAutomation().executeShellCommand("input tap "+p[0]+" "+p[1]);java.io.FileInputStream output=new java.io.FileInputStream(command.getFileDescriptor())){byte[] buffer=new byte[256];while(output.read(buffer)!=-1){}}
         SystemClock.sleep(200);waitForIdleSync();
+    }
+    private void diagnoseTouch(Activity activity)throws Exception{
+        runOnMainSync(()->{View target=activity.findViewById(1010);report("Touch target clickable="+target.isClickable()+" focus="+activity.getWindow().getDecorView().hasWindowFocus()+" shown="+target.isShown());});
+        try(ParcelFileDescriptor command=getUiAutomation().executeShellCommand("dumpsys input");java.io.FileInputStream output=new java.io.FileInputStream(command.getFileDescriptor())){ByteArrayOutputStream bytes=new ByteArrayOutputStream();byte[] buffer=new byte[2048];int read;while((read=output.read(buffer))!=-1&&bytes.size()<60000)bytes.write(buffer,0,read);report("INPUT_DIAGNOSTIC\n"+new String(bytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8));}
     }
     private void awaitLayout(Activity activity,boolean full)throws Exception{
         long deadline=SystemClock.elapsedRealtime()+10000;
