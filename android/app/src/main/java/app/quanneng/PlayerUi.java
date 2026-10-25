@@ -14,7 +14,7 @@ final class PlayerUi {
     static Drawable feedback(Context c,int color,int radius){return new RippleDrawable(ColorStateList.valueOf(0x40FFFFFF),surface(c,color,radius),surface(c,Color.WHITE,radius));}
     static TextView text(Context c,String value,int size,int color){TextView t=new TextView(c);t.setText(value);t.setTextSize(size);t.setTextColor(color);t.setFontFeatureSettings("tnum");return t;}
     static Button chip(Context c,String value){Button b=new Button(c);b.setText(value);b.setAllCaps(false);b.setTextSize(14);b.setTextColor(TEXT);b.setMinWidth(0);b.setMinimumWidth(0);b.setMinHeight(dp(c,48));b.setPadding(dp(c,8),0,dp(c,8),0);b.setBackground(feedback(c,SURFACE,12));return b;}
-    static ImageButton icon(Context c,String name,String label,boolean primary){ImageButton b=new ImageButton(c);b.setMinimumWidth(dp(c,48));b.setMinimumHeight(dp(c,48));b.setPadding(dp(c,13),dp(c,13),dp(c,13),dp(c,13));b.setBackground(feedback(c,primary?ACCENT:0x00212B2E,primary?28:14));setIcon(b,name,label,primary);return b;}
+    static ImageButton icon(Context c,String name,String label,boolean primary){ImageButton b=new ImageButton(c);b.setScaleType(ImageView.ScaleType.FIT_CENTER);b.setMinimumWidth(dp(c,48));b.setMinimumHeight(dp(c,48));b.setPadding(dp(c,13),dp(c,13),dp(c,13),dp(c,13));b.setBackground(feedback(c,primary?ACCENT:0x00212B2E,primary?28:14));setIcon(b,name,label,primary);return b;}
     static void setIcon(ImageButton b,String name,String label,boolean primary){b.setImageDrawable(new Glyph(name,primary?BG:TEXT));b.setContentDescription(label);b.setTooltipText(label);}
     private static final class Glyph extends Drawable {
         private final String name;private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);

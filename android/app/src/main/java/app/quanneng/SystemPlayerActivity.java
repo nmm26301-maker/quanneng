@@ -108,7 +108,7 @@ public final class SystemPlayerActivity extends Activity {
     private void sizePlayer(){
         int width=root.getWidth()-root.getPaddingLeft()-root.getPaddingRight();if(width<=0)return;
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,fullscreen?0:(int)((width-dp(24))*9f/16f)+dp(136),fullscreen?1:0);if(!fullscreen)p.setMargins(dp(12),0,dp(12),0);videoFrame.setLayoutParams(p);
-        FrameLayout.LayoutParams vp=(FrameLayout.LayoutParams)video.getLayoutParams();vp.bottomMargin=fullscreen?0:dp(136);video.setLayoutParams(vp);videoFrame.setBackground(PlayerUi.surface(this,Color.BLACK,fullscreen?0:18));
+        FrameLayout.LayoutParams vp=(FrameLayout.LayoutParams)video.getLayoutParams();vp.gravity=fullscreen?Gravity.CENTER:Gravity.TOP|Gravity.CENTER_HORIZONTAL;vp.bottomMargin=fullscreen?0:dp(136);video.setLayoutParams(vp);videoFrame.setBackground(PlayerUi.surface(this,Color.BLACK,fullscreen?0:18));
         controls.setBackground(fullscreen?new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0x10000000,0xE6000000}):PlayerUi.surface(this,PlayerUi.SURFACE,0));
     }
     private void setFullscreen(boolean value){
