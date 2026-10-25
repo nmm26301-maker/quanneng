@@ -11,6 +11,6 @@ test('actual app renders player and bookmarks without removed AI or missing icon
  try{
   const result=await build({entryPoints:[fileURLToPath(new URL('../src/main.jsx',import.meta.url))],bundle:true,format:'esm',platform:'node',write:false,loader:{'.css':'empty'},external:['react','react-dom/client','@phosphor-icons/react','hls.js']});
   const file=folder+'/app.mjs';await writeFile(file,result.outputFiles[0].text);const {App}=await import(pathToFileURL(file));
-  const html=renderToString(createElement(App));assert.ok(html.includes('网址收藏'));assert.ok(html.includes('添加第一个网址'));assert.ok(html.includes('还没有视频'));assert.ok(!html.includes('全能 AI'));assert.ok(!html.includes('API Key'));
+  const html=renderToString(createElement(App));assert.ok(html.includes('网址收藏'));assert.ok(html.includes('添加第一个网址'));assert.ok(html.includes('还没有视频'));for(const name of ['百度网盘','哔哩哔哩','抖音','快手','腾讯视频','爱奇艺'])assert.ok(html.includes(name),name);assert.ok(html.includes('导入并保存到手机'));assert.ok(!html.includes('全能 AI'));assert.ok(!html.includes('API Key'));
  }finally{delete globalThis.window;delete globalThis.location;delete globalThis.localStorage;await rm(folder,{recursive:true,force:true});}
 });
