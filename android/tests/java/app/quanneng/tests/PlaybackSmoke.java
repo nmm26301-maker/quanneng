@@ -21,8 +21,8 @@ public final class PlaybackSmoke extends Instrumentation {
             exerciseLoop(network);report("Native AB interval repeated successfully");
             exerciseFullscreen(network);report("Fullscreen, preserved pause, control visibility and system back verified");
             runOnMainSync(network::finish);SystemClock.sleep(500);
-            Activity local=open(Intent.ACTION_VIEW,Uri.parse("content://app.quanneng.tests.fixture/flower.mp4"));
-            awaitPlayable(local);report("Local content URI decoded and position advanced");runOnMainSync(local::finish);
+            Activity local=open(Intent.ACTION_VIEW,Uri.parse("content://app.quanneng.tests.fixture/seek-fixture.mp4"));
+            awaitPlayable(local);report("Local content URI decoded and position advanced");exerciseJumps(local);report("All six fullscreen jumps, portrait action, boundaries and repeated taps verified");runOnMainSync(local::finish);
             result.putString("stream","QUANNENG_SMOKE_OK\n");finish(Activity.RESULT_OK,result);
         }catch(Throwable error){result.putString("stream","QUANNENG_SMOKE_FAILED: "+error.toString()+"\n");finish(Activity.RESULT_CANCELED,result);}
     }
@@ -59,8 +59,28 @@ public final class PlaybackSmoke extends Instrumentation {
         report("Actual touchscreen restored controls");long backTime=SystemClock.uptimeMillis();getUiAutomation().injectInputEvent(new KeyEvent(backTime,backTime,KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_BACK,0),true);getUiAutomation().injectInputEvent(new KeyEvent(backTime,backTime+50,KeyEvent.ACTION_UP,KeyEvent.KEYCODE_BACK,0),true);awaitLayout(activity,false);if(activity.isFinishing())throw new AssertionError("System back closed player instead of exiting fullscreen");
         awaitPlayable(activity);
     }
-    private void tapVideo(Activity activity)throws Exception{
-        AtomicReference<int[]> point=new AtomicReference<>();runOnMainSync(()->{View target=activity.findViewById(1010);int[] xy=new int[2];target.getLocationOnScreen(xy);point.set(new int[]{xy[0]+target.getWidth()/2,xy[1]+target.getHeight()/2});});
+    private void exerciseJumps(Activity activity)throws Exception{
+        if(state(activity)[0]<1299000)throw new AssertionError("Long seek fixture missing");
+        setPosition(activity,650000);runOnMainSync(()->{View b=activity.findViewById(1104);b.requestRectangleOnScreen(new android.graphics.Rect(0,0,b.getWidth(),b.getHeight()),true);});tapControl(activity,1104);awaitPosition(activity,710000);
+        runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,true);SystemClock.sleep(700);
+        int[] deltas={-600,-60,-10,10,60,600};for(int i=0;i<deltas.length;i++){
+            setPosition(activity,650000);tapControl(activity,1200+i);AtomicReference<Boolean> feedback=new AtomicReference<>(false);runOnMainSync(()->feedback.set(activity.findViewById(1300).getVisibility()==View.VISIBLE));if(!feedback.get())throw new AssertionError("Jump feedback missing");awaitPosition(activity,650000+deltas[i]*1000);
+            if(i==2)snapshot("JUMP_CONTROLS");
+        }
+        setPosition(activity,500000);tapControl(activity,1203);tapControl(activity,1203);tapControl(activity,1203);awaitPosition(activity,530000);
+        setPosition(activity,50000);tapControl(activity,1200);awaitPosition(activity,0);
+        setPosition(activity,1250000);tapControl(activity,1205);awaitPosition(activity,1300000);
+        runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,false);
+    }
+    private void setPosition(Activity activity,int position)throws Exception{runOnMainSync(()->{VideoView v=activity.findViewById(1000);v.pause();v.seekTo(position);});awaitPosition(activity,position);SystemClock.sleep(500);}
+    private void awaitPosition(Activity activity,int target)throws Exception{
+        long deadline=SystemClock.elapsedRealtime()+8000;
+        while(SystemClock.elapsedRealtime()<deadline){AtomicReference<Boolean> good=new AtomicReference<>(false);runOnMainSync(()->{VideoView v=activity.findViewById(1000);good.set(!v.isPlaying()&&Math.abs(v.getCurrentPosition()-target)<=1200);});if(good.get())return;SystemClock.sleep(100);}
+        throw new AssertionError("Paused seek did not reach "+target+": "+java.util.Arrays.toString(state(activity)));
+    }
+    private void tapVideo(Activity activity)throws Exception{tapControl(activity,1010);}
+    private void tapControl(Activity activity,int id)throws Exception{
+        AtomicReference<int[]> point=new AtomicReference<>();runOnMainSync(()->{View target=activity.findViewById(id);if(id>=1100&&id<1300){android.graphics.Rect bounds=new android.graphics.Rect();if(!target.getGlobalVisibleRect(bounds)||bounds.width()<target.getWidth()||bounds.height()<target.getHeight())throw new AssertionError("Jump target clipped: "+id);float density=activity.getResources().getDisplayMetrics().density;if(target.getWidth()<47*density||target.getHeight()<47*density)throw new AssertionError("Jump target smaller than 48dp: "+id);}int[] xy=new int[2];target.getLocationOnScreen(xy);point.set(new int[]{xy[0]+target.getWidth()/2,xy[1]+target.getHeight()/2});});
         int[] p=point.get();report("Touchscreen target: "+p[0]+","+p[1]);
         // Android shell input uses the platform touchscreen source and display mapping.
         try(ParcelFileDescriptor command=getUiAutomation().executeShellCommand("input tap "+p[0]+" "+p[1]);java.io.FileInputStream output=new java.io.FileInputStream(command.getFileDescriptor())){byte[] buffer=new byte[256];while(output.read(buffer)!=-1){}}

@@ -1,4 +1,4 @@
-# 全能 Android v0.2.2
+# 全能 Android v0.2.3
 
 ## 使用
 
@@ -18,7 +18,7 @@
 npm ci --prefix frontend
 npm test --prefix frontend
 npm run build --prefix frontend
-python3 android/tools/build.py --sdk /path/to/sdk-unpacked --keystore /private/quanneng-signing.p12 --out /path/to/Quanneng-v0.2.2.apk
+python3 android/tools/build.py --sdk /path/to/sdk-unpacked --keystore /private/quanneng-signing.p12 --out /path/to/Quanneng-v0.2.3.apk
 ```
 
 脚本期望 SDK 目录里含 `android-15/`（Build Tools 35.0.0 解压目录）与 `android-35/android.jar`。自动生成测试签名证书，默认密码 `android`；可用环境变量 `QUANNENG_STORE_PASSWORD` 指定。保留私有签名文件以便后续覆盖升级；不要提交签名文件到 Git。当前交付为测试签名版。
@@ -44,3 +44,9 @@ python3 android/tools/build.py --sdk /path/to/sdk-unpacked --keystore /private/q
 扩展 Android 仪器测试覆盖横竖屏布局、暂停状态、全屏后继续播放、控制显隐和返回行为，并保留网络解码与 A/B 循环回归。尚未在用户真机上验收。
 
 仪器测试在独立临时模拟器中将系统首次沉浸教学提示标为已阅读，这与 Android CTS 的 DisableImmersiveModeConfirmationRule 使用同一前置设置；不改变用户手机设置，不给安装包添加系统设置权限。用户首次进入全屏时如看到系统“知道了 / Got it”提示，正常点击后即可使用播放器。
+
+## v0.2.3 精准跳转
+
+竖屏六档跳转改为带方向图标、分层数字和描边的时间块。横屏全屏直接显示 −10分、−1分、−10秒、+10秒、+1分、+10分，所有触摸目标不少于48dp。按压缩放90ms、回弹160ms，叠加原生涟漪；跳转后视频区域显示方向和目标时间。连续点击会累加目标，接近起止边界时明确反馈；暂停跳转不自动播放。按系统动画关闭设置自动省略位移动效。
+
+新增1300秒合成测试媒体，验证六档实际跳转、起止截断、连续点击、暂停保持与全屏按钮边界；不会将测试视频放入正式APK。
