@@ -1,4 +1,4 @@
-# 全能 Android v0.2.1
+# 全能 Android v0.2.2
 
 ## 使用
 
@@ -18,7 +18,7 @@
 npm ci --prefix frontend
 npm test --prefix frontend
 npm run build --prefix frontend
-python3 android/tools/build.py --sdk /path/to/sdk-unpacked --keystore /private/quanneng-signing.p12 --out /path/to/Quanneng-v0.2.1.apk
+python3 android/tools/build.py --sdk /path/to/sdk-unpacked --keystore /private/quanneng-signing.p12 --out /path/to/Quanneng-v0.2.2.apk
 ```
 
 脚本期望 SDK 目录里含 `android-15/`（Build Tools 35.0.0 解压目录）与 `android-35/android.jar`。自动生成测试签名证书，默认密码 `android`；可用环境变量 `QUANNENG_STORE_PASSWORD` 指定。保留私有签名文件以便后续覆盖升级；不要提交签名文件到 Git。当前交付为测试签名版。
@@ -31,8 +31,14 @@ python3 android/tools/build.py --sdk /path/to/sdk-unpacked --keystore /private/q
 
 已完成核心单测、生产构建、Java 编译、Dex 转换、资源打包及 APK 签名校验；浏览器验证覆盖视频播放、AB循环、倍速、页面切换和缺少 AI 配置时的提示。尚未在真实安卓手机上运行验收，未使用真实 API Key 测试模型响应。不要把编译通过等同于所有机型兼容。
 
-## v0.2.1 网络播放修复
+## v0.2.2 网络播放修复
 
 安卓网络视频默认进入原生播放页，避免以网页跨域策略加载媒体。网页发现媒体时，Referer、User-Agent 及该媒体 URL 适用的 Cookie 只在本机内存转交；Cookie 不写入播放列表。没有明确视频后缀的普通网页地址会先检查 Content-Type，HTML 转入网页发现流程。原生页保留快进、倍速、AB 循环、文件 URI、字幕导入及可用时的网页回退；加密、失效地址与设备不支持的编码仍需分别处理。
 
 增加隔离的 Android 仪器测试 APK，通过默认分享入口启动 HTTPS 视频，检查视频尺寸和播放进度实际推进、AB 循环，以及 content:// 本地媒体。测试 APK、公开测试视频和导出的测试 Provider 均不会进入用户安装包。
+
+## v0.2.2 播放界面与全屏
+
+深色原生播放页采用统一的薄荷绿主播放键、48dp 以上触摸控件、分组跳转卡片和 A/B 取点卡片。进度条支持拖动；倍速切换保持原本的播放/暂停状态。全屏键切换横屏沉浸模式，保留播放器与进度；轻点画面唤出控制，播放时 4 秒自动收起，暂停和读屏触摸探索时保持显示。系统返回先退出全屏，再返回列表；顶部返回键也可退出全屏。切换全屏不重建或重新加载媒体。
+
+扩展 Android 仪器测试覆盖横竖屏布局、暂停状态、全屏后继续播放、控制显隐和返回行为，并保留网络解码与 A/B 循环回归。尚未在用户真机上验收。

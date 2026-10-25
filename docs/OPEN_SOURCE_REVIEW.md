@@ -18,3 +18,9 @@
 ### v0.2.1 回归测试方案
 
 采用 ReactiveCircus/android-emulator-runner（Apache-2.0，v2 发布版提交 a421e43855164a8197daf9d8d40fe71c6996bb0d）在 GitHub Linux 临时 runner 上运行加速 Android 模拟器；以 android-actions/setup-android（MIT，提交 035682743ab223ec9c6169af09811dff8247e520）准备官方 SDK 工具。前者依赖可用 KVM，启动和镜像下载需要时间；后者解决 runner 未预装 sdkmanager 的问题。使用 Android 官方 Instrumentation 和 VideoView API，不引入生产环境第三方播放器源码。VideoView 的带请求头 setVideoURI 接口用于媒体来源上下文传递。
+
+### v0.2.2 播放控件与沉浸设计
+
+参考 moneytoo/Player（Unlicense，2026-10-22 有维护提交）的独立主播放键、集中传输控制和轻点显示控制的设计。该项目依赖 Media3/ExoPlayer，扩大依赖和切换媒体栈不在本次 UI 修复范围；保留现有 VideoView，使用 Android 官方 WindowInsetsController（API 30+）与旧系统沉浸标志实现全屏。Android 官方文档说明系统栏可由边缘手势临时唤出，桌面窗口的标题栏也可能保留，因此不拦截系统导航手势。未复制第三方播放器源码。颜色、矢量图标和布局由本项目实现。
+
+官方资料：https://developer.android.com/develop/ui/views/layout/immersive ；项目：https://github.com/moneytoo/Player 。
