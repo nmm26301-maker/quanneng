@@ -25,10 +25,9 @@ public final class SystemPlayerActivity extends Activity {
     private ArrayList<String> queue;
     private long pointA=0,pointB=0;
     private boolean looping=false,ready=false,failed=false,foreground=false;
-    private float speed=1f;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable tick=new Runnable(){public void run(){
-        if(ready){int now=video.getCurrentPosition();if(looping&&now>=pointB){video.seekTo((int)pointA);now=(int)pointA;}
+        if(ready){int now=video.getCurrentPosition();if(looping&&now>=pointB){seekExact((int)pointA);now=(int)pointA;}
             position.setText(time(now)+" / "+time(video.getDuration())+"    A "+time(pointA)+" → B "+time(pointB));playButton.setText(video.isPlaying()?"暂停":"播放");}
         handler.postDelayed(this,80);
     }};
@@ -42,24 +41,25 @@ public final class SystemPlayerActivity extends Activity {
         MediaController controller=new MediaController(this);controller.setAnchorView(video);video.setMediaController(controller);
         position=new TextView(this);position.setText("正在加载视频…");position.setTextColor(Color.rgb(195,221,190));position.setTextSize(11);position.setPadding(dp(12),dp(9),dp(12),dp(9));root.addView(position);
         LinearLayout skip=new LinearLayout(this);root.addView(skip);
-        for(int seconds:new int[]{-600,-60,-10,10,60,600}){Button b=button((seconds>0?"+":"−")+(Math.abs(seconds)>=60?Math.abs(seconds)/60+"分":Math.abs(seconds)+"秒"),skip);b.setTextSize(10);b.setOnClickListener(v->{if(!ready)return;clearLoop();video.seekTo(Math.max(0,Math.min(video.getDuration(),video.getCurrentPosition()+seconds*1000)));});}
+        for(int seconds:new int[]{-600,-60,-10,10,60,600}){Button b=button((seconds>0?"+":"−")+(Math.abs(seconds)>=60?Math.abs(seconds)/60+"分":Math.abs(seconds)+"秒"),skip);b.setTextSize(10);b.setOnClickListener(v->{if(!ready)return;clearLoop();seekExact(Math.max(0,Math.min(video.getDuration(),video.getCurrentPosition()+seconds*1000)));});}
         LinearLayout ab=new LinearLayout(this);root.addView(ab);
         Button a=button("设置 A",ab);a.setId(1001);a.setOnClickListener(v->{if(ready){pointA=video.getCurrentPosition();clearLoop();}});
         Button b=button("设置 B",ab);b.setId(1002);b.setOnClickListener(v->{if(ready){pointB=video.getCurrentPosition();clearLoop();}});
-        loopButton=button("开启循环",ab);loopButton.setId(1003);loopButton.setOnClickListener(v->{if(!ready||pointB<=pointA){toast("先在不同时间设置 A、B 点");return;}looping=!looping;loopButton.setText(looping?"循环中":"开启循环");if(looping){video.seekTo((int)pointA);video.start();}});
+        loopButton=button("开启循环",ab);loopButton.setId(1003);loopButton.setOnClickListener(v->{if(!ready||pointB<=pointA){toast("先在不同时间设置 A、B 点");return;}looping=!looping;loopButton.setText(looping?"循环中":"开启循环");if(looping){seekExact((int)pointA);video.start();}});
         LinearLayout tools=new LinearLayout(this);root.addView(tools);
         playButton=button("播放",tools);playButton.setId(1004);playButton.setOnClickListener(v->{if(!ready)return;if(video.isPlaying())video.pause();else video.start();});
         speedButton=button("1.0 倍速",tools);speedButton.setOnClickListener(v->chooseSpeed());
         Button subtitle=button("导入字幕",tools);subtitle.setOnClickListener(v->{if(!ready){toast("请等待视频加载");return;}try{startActivityForResult(new Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),44);}catch(ActivityNotFoundException e){toast("系统未找到文件选择器");}});
         video.setOnPreparedListener(mp->{media=mp;ready=true;failed=false;handler.removeCallbacks(tick);handler.post(tick);
-            int resume=getIntent().getIntExtra("position",0);if(resume>0&&resume<video.getDuration()-2000)video.seekTo(resume);
+            int resume=getIntent().getIntExtra("position",0);if(resume>0&&resume<video.getDuration()-2000)seekExact(resume);
             if(foreground)video.start();position.setText("视频已就绪");
         });
-        video.setOnCompletionListener(mp->{if(looping){video.seekTo((int)pointA);video.start();return;}next();});
+        video.setOnCompletionListener(mp->{if(looping){seekExact((int)pointA);video.start();return;}next();});
         video.setOnErrorListener((mp,what,extra)->{showFailure(extra);return true;});
         queue=getIntent().getStringArrayListExtra("queue");current=getIntent().getData();if(current==null){finish();return;}load(current,true);
     }
     private Button button(String text,LinearLayout row){Button b=new Button(this);b.setText(text);b.setTextSize(12);b.setPadding(dp(3),0,dp(3),0);row.addView(b,new LinearLayout.LayoutParams(0,dp(54),1));return b;}
+    private void seekExact(int value){try{if(media!=null)media.seekTo((long)value,MediaPlayer.SEEK_CLOSEST);else video.seekTo(value);}catch(IllegalStateException error){toast("视频尚未准备好，请稍后重试");}}
     private void clearLoop(){looping=false;loopButton.setText("开启循环");}
     private void load(Uri uri,boolean initial){
         current=uri;ready=false;failed=false;media=null;pointA=pointB=0;clearLoop();title.setText(displayName(uri));position.setText("正在加载网络或本地视频…");
@@ -90,7 +90,7 @@ public final class SystemPlayerActivity extends Activity {
         if(getIntent().getBooleanExtra("autoNext",true)&&queue!=null){int index=queue.indexOf(current.toString());if(index>=0&&index+1<queue.size()){getIntent().putExtra("position",0);load(Uri.parse(queue.get(index+1)),false);return;}}
         playButton.setText("播放");
     }
-    private void chooseSpeed(){if(!ready||media==null)return;String[] labels={"0.5 倍速","0.75 倍速","1.0 倍速","1.25 倍速","1.5 倍速","2.0 倍速","3.0 倍速"};float[] values={.5f,.75f,1f,1.25f,1.5f,2f,3f};new AlertDialog.Builder(this).setTitle("播放速度").setItems(labels,(d,i)->{try{media.setPlaybackParams(media.getPlaybackParams().setSpeed(values[i]));speed=values[i];speedButton.setText(labels[i]);}catch(RuntimeException e){toast("此格式不支持所选速度");}}).show();}
+    private void chooseSpeed(){if(!ready||media==null)return;String[] labels={"0.5 倍速","0.75 倍速","1.0 倍速","1.25 倍速","1.5 倍速","2.0 倍速","3.0 倍速"};float[] values={.5f,.75f,1f,1.25f,1.5f,2f,3f};new AlertDialog.Builder(this).setTitle("播放速度").setItems(labels,(d,i)->{try{media.setPlaybackParams(media.getPlaybackParams().setSpeed(values[i]));speedButton.setText(labels[i]);}catch(RuntimeException e){toast("此格式不支持所选速度");}}).show();}
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);if(request!=44||result!=RESULT_OK||data==null||data.getData()==null||!ready)return;
         try{Uri uri=data.getData();String name=displayName(uri).toLowerCase(Locale.ROOT);String mime=name.endsWith(".vtt")?"text/vtt":"application/x-subrip";
