@@ -61,3 +61,12 @@ python3 android/tools/build.py --sdk /path/to/sdk-unpacked --keystore /private/q
 - Build tool fetches two pinned Apache-2.0 AndroidX AARs from Google Maven, checks hashes, includes resource IDs and dex classes; source app remains Java 8, minimum Android 8 / API 26.
 
 The current v0.2.4 player uses GSYVideoPlayer 14.0.0's Media3 1.10.1 backend, with Media3 HLS/DASH modules and text subtitle rendering. The earlier v0.2.x descriptions of platform VideoView/MediaPlayer are historical. `PlaybackSmoke` now asserts native dimensions/position through the adapter and first tests public Shaka HLS and DASH fixtures, then MP4, AB, full-screen, all six jumps and local content playback. The dependency lock records every included AAR/JAR and checksum; no Cast, service/session, IJK native libraries or downloaded executable is included.
+
+
+## v0.2.5 六平台入口与用户导出视频保存
+
+- 「平台导入」页包含百度网盘、B 站、抖音、快手、腾讯视频、爱奇艺六个官方网页入口。入口仅打开 HTTPS 网站，不假装拥有平台下载接口。
+- 「导入并保存到手机」通过 ACTION_OPEN_DOCUMENT 选择用户可读的普通视频，再通过 ACTION_CREATE_DOCUMENT 选择保存目标。64 KiB 分块复制，文件不会上传至第三方服务器。成功后尝试交给原生播放器打开。
+- Android 支持从其他应用通过 ACTION_SEND (video/*) 和 ACTION_SEND_MULTIPLE (video/*) 分享普通文件到全能。已有文本链接分享入口仍保留。
+- 不能访问 Android/data、其他 APP 私有缓存或破解 DRM；来源无法提供可读取文件时会失败并提示。文件选择器授权仍受 Android 存储限制。
+- 复制流程与六个平台的真实登录、播放、导出行为尚待真实机型验收；前端单测和 CI 安卓构建不能代替六个服务端到端验证。
