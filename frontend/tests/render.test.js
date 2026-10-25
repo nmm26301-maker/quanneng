@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import {createElement} from 'react';
+import {renderToString} from 'react-dom/server';
+test('actual app renders player and bookmarks without removed AI or missing icons',async()=>{
+ const folder=await mkdtemp(fileURLToPath(new URL('../node_modules/.quanneng-render-',import.meta.url)));
+ globalThis.window={};globalThis.location={hash:''};globalThis.localStorage={getItem:()=>null};
+ try{
+  const result=await build({entryPoints:[fileURLToPath(new URL('../src/main.jsx',import.meta.url))],bundle:true,format:'esm',platform:'node',write:false,loader:{'.css':'empty'},external:['react','react-dom/client','@phosphor-icons/react','hls.js']});
+  const file=folder+'/app.mjs';await writeFile(file,result.outputFiles[0].text);const {App}=await import(pathToFileURL(file));
+  const html=renderToString(createElement(App));assert.ok(html.includes('网址收藏'));assert.ok(html.includes('添加第一个网址'));assert.ok(html.includes('还没有视频'));assert.ok(!html.includes('全能 AI'));assert.ok(!html.includes('API Key'));
+ }finally{delete globalThis.window;delete globalThis.location;delete globalThis.localStorage;await rm(folder,{recursive:true,force:true});}
+});

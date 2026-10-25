@@ -6,7 +6,7 @@ const script=fs.readFileSync(new URL('../public/media-discovery.js',import.meta.
 function fixture(){
  const messages=[],events={};const pending=Promise.resolve({ok:true,url:'https://media.example/stream?id=1',headers:{get:()=> 'video/mp4'}});
  class XHR{addEventListener(event,fn){this.listener=fn;}send(){this.status=200;this.responseURL='https://media.example/stream?id=xhr';this.listener();}getResponseHeader(){return 'application/vnd.apple.mpegurl';}}
- const context={URL,Set,XMLHttpRequest:XHR,location:{href:'https://frame.example/player'},document:{querySelectorAll:()=>[],addEventListener:(name,fn)=>events[name]=fn},performance:{getEntriesByType:()=>[{name:'https://media.example/chunk.m4s'},{name:'https://media.example/movie.m3u8'}]}};
+ const context={URL,Set,XMLHttpRequest:XHR,location:{href:'https://frame.example/player'},document:{querySelectorAll:()=>[],addEventListener:(name,fn)=>events[name]=fn},performance:{getEntriesByType:()=>[{name:'https://media.example/chunk.m4s'},{name:'https://media.example/0001.mp4'},{name:'https://media.example/init.mp4'},{name:'https://media.example/movie.m3u8'}]}};
  context.window=context;context.fetch=()=>pending;context.QuannengMedia={postMessage:raw=>messages.push(JSON.parse(raw))};vm.runInNewContext(script,context);return {context,messages,pending};
 }
 test('observes extensionless fetch/XHR media without consuming or replacing the response',async()=>{
@@ -14,7 +14,7 @@ test('observes extensionless fetch/XHR media without consuming or replacing the 
  assert.ok(f.messages.some(x=>x.url==='https://media.example/stream?id=1'));
  assert.ok(f.messages.some(x=>x.url==='https://media.example/stream?id=xhr'));
  assert.ok(f.messages.every(x=>x.frame==='https://frame.example/player'));
- assert.ok(!f.messages.some(x=>x.url?.includes('chunk.m4s')));
+ assert.ok(!f.messages.some(x=>/chunk\.m4s|0001\.mp4|init\.mp4/.test(x.url || '')));
  const count=f.messages.length;f.context.QuannengMedia.onmessage({data:'scan'});assert.equal(f.messages.length,count);
 });
 test('blob is status rather than an unusable native URL, unsafe source is ignored',()=>{

@@ -14,7 +14,8 @@
     if (url.protocol !== 'https:' || url.username || url.password || url.href.length > 8192 || segment.test(url.href)) return;
     const mime = type.toLowerCase().split(';')[0].trim();
     const playable = /^(?:video\/(?:mp4|webm|quicktime|x-m4v|x-matroska)|application\/(?:vnd\.apple\.mpegurl|x-mpegurl|dash\+xml))$/.test(mime);
-    if (!direct && /\/(?:init|dashinit|seg(?:ment)?|chunk|frag(?:ment)?)[-_.0-9][^/]*\.(mp4|m4v)(?:[?#]|$)/i.test(url.href)) return;
+    const name = url.pathname.split('/').pop().replace(/\.(mp4|m4v|webm|mkv|mov)$/i, '');
+    if (!direct && (/^\d+$/.test(name) || /(?:^|[-_.])(?:init|dashinit|seg(?:ment)?|chunk|frag(?:ment)?)(?:[-_.]|[0-9]|$)/i.test(name))) return;
     if (!direct && !mediaPath.test(url.href) && !playable) return;
     if (seen.has(url.href)) return;
     seen.add(url.href); report({kind: 'source', url: url.href, mime});
