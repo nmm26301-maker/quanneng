@@ -5,7 +5,7 @@
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
 <uses-feature android:name="android.software.picture_in_picture" android:required="false"/>
-<application android:name=".PrivateApplication" android:label="全能" android:icon="@drawable/quanneng_icon" android:roundIcon="@drawable/quanneng_icon" android:extractNativeLibs="true" android:theme="@style/AppTheme" android:allowBackup="false" android:usesCleartextTraffic="false" android:hardwareAccelerated="true" android:supportsRtl="true">
+<application android:name=".PrivateApplication" android:label="全能" android:icon="@drawable/quanneng_icon" android:roundIcon="@drawable/quanneng_icon" android:extractNativeLibs="true" android:theme="@style/AppTheme" android:allowBackup="false" android:fullBackupContent="false" android:usesCleartextTraffic="false" android:hardwareAccelerated="true" android:supportsRtl="true">
 <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:configChanges="orientation|screenSize|keyboardHidden|uiMode" android:supportsPictureInPicture="false" android:windowSoftInputMode="adjustResize">
 <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
 <intent-filter><action android:name="android.intent.action.SEND"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="text/plain"/></intent-filter>
