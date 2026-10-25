@@ -10,17 +10,41 @@ const iconProps={size:22,weight:'regular','aria-hidden':true};
 function IconButton({label,children,...rest}){return <button className="icon-button" aria-label={label} title={label} {...rest}>{children}</button>;}
 function Modal({title,onClose,children}){const ref=useRef();useEffect(()=>{const old=document.activeElement;ref.current.showModal();return ()=>old?.focus?.();},[]);return <dialog ref={ref} onCancel={onClose} className="modal"><div className="flex items-center justify-between gap-4 mb-5"><h2 className="text-xl font-semibold">{title}</h2><IconButton label="关闭" onClick={onClose}><X {...iconProps}/></IconButton></div>{children}</dialog>;}
 function App(){
- const [tab,setTab]=useState(location.hash==='#bookmarks'?'bookmarks':'player'),[notice,setNotice]=useState(''),[shared,setShared]=useState(null);
+ const [tab,setTab]=useState(location.hash==='#bookmarks'?'bookmarks':location.hash==='#sources'?'sources':'player'),[notice,setNotice]=useState(''),[shared,setShared]=useState(null);
  const timer=useRef(),main=useRef();
  const notify=s=>{setNotice(s);clearTimeout(timer.current);timer.current=setTimeout(()=>setNotice(''),5500);};
  useEffect(()=>{window.quannengOpenURL=url=>{setShared({url,id:uid()});setTab('player');};window.quannengBack=()=>{if(document.querySelector('dialog[open]')){document.querySelector('dialog[open]').dispatchEvent(new Event('cancel',{cancelable:true}));return true;}if(tab!=='player'){setTab('player');history.replaceState(null,'','#player');return true;}return false;};native()?.frontendReady?.();return ()=>{delete window.quannengOpenURL;delete window.quannengBack;};},[tab]);
  const switchTab=next=>{history.replaceState(null,'','#'+next);setTab(next);requestAnimationFrame(()=>main.current?.focus({preventScroll:true}));};
- const tabs=[['player','播放器',FilmStrip],['bookmarks','网址收藏',BookmarkSimple]];
+ const tabs=[['player','播放器',FilmStrip],['sources','平台导入',FolderOpen],['bookmarks','网址收藏',BookmarkSimple]];
  return <div className="app-frame"><header className="topbar"><a href="#player" onClick={e=>{e.preventDefault();switchTab('player');}} className="brand"><span className="brand-symbol"><Play size={21} weight="fill" aria-hidden="true"/></span><span>全能<span className="brand-caption">QUANNENG</span></span></a><nav className="desktop-nav" aria-label="主导航">{tabs.map(([id,label,I])=><button key={id} aria-current={tab===id?'page':undefined} className={tab===id?'active':''} onClick={()=>switchTab(id)}><I {...iconProps}/>{label}</button>)}</nav><span className="device-note"><span className="status-dot"/> 你的私人放映室</span></header>
- <main ref={main} tabIndex={-1} className="main-content"><div hidden={tab!=='player'}><Player active={tab==='player'} notify={notify} shared={shared}/></div><div hidden={tab!=='bookmarks'}><Bookmarks notify={notify}/></div></main>
+ <main ref={main} tabIndex={-1} className="main-content"><div hidden={tab!=='player'}><Player active={tab==='player'} notify={notify} shared={shared}/></div><div hidden={tab!=='bookmarks'}><Bookmarks notify={notify}/></div><div hidden={tab!=='sources'}><Sources notify={notify}/></div></main>
  <nav className="bottom-nav" aria-label="主导航">{tabs.map(([id,label,I])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>switchTab(id)} className={tab===id?'active':''}><I size={24} weight={tab===id?'fill':'regular'} aria-hidden="true"/><span>{label}</span></button>)}</nav>
- <div className={'toast '+(notice?'visible':'')} role="status" aria-live="polite">{notice}</div><footer className="footer"><span>全能 · 随心播放</span><span>本地文件不上传 · v0.2.4</span></footer></div>;
+ <div className={'toast '+(notice?'visible':'')} role="status" aria-live="polite">{notice}</div><footer className="footer"><span>全能 · 随心播放</span><span>本地文件不上传 · v0.2.5</span></footer></div>;
 }
+
+const videoSources = [
+ {name:'百度网盘',url:'https://pan.baidu.com/',mode:'普通视频文件',detail:'优先通过网盘官方的下载或导出功能获取 MP4 等文件，再导入全能。'},
+ {name:'哔哩哔哩',url:'https://www.bilibili.com/',mode:'分享链接 / 已导出视频',detail:'可以打开网页或分享链接；APP 离线缓存不等于独立视频文件。'},
+ {name:'抖音',url:'https://www.douyin.com/',mode:'分享链接 / 已保存作品',detail:'优先使用作者允许的保存功能；公开网页是否能转播以实际播放为准。'},
+ {name:'快手',url:'https://www.kuaishou.com/',mode:'分享链接 / 已保存作品',detail:'优先使用应用允许的下载或分享；不读取其私有缓存。'},
+ {name:'腾讯视频',url:'https://v.qq.com/',mode:'平台内观看 / 普通文件导入',detail:'版权影视离线内容可能受 DRM 保护，不能承诺导出 MP4。'},
+ {name:'爱奇艺',url:'https://www.iqiyi.com/',mode:'平台内观看 / 普通文件导入',detail:'会员缓存与加密视频保留在原平台观看；已导出的普通视频可导入。'}
+];
+function Sources({notify}){
+ function openSite(item){if(native()?.openWebsite)native().openWebsite(item.url);else window.open(item.url,'_blank','noopener,noreferrer');}
+ function importFile(){if(native()?.importVideoToPhone)native().importVideoToPhone();else notify('请在全能 Android APP 中使用“导入并保存到手机”');}
+ function playFile(){if(native()?.openLocalVideo)native().openLocalVideo();else notify('网页版请切到“播放器”页选择本地视频');}
+ return <div className="sources-page">
+  <section className="page-heading"><div><span className="eyebrow">YOUR VIDEO SOURCES</span><h1>六大平台，<span>统一入口。</span></h1><p className="muted">链接打开原网页；普通视频可从其他 APP 分享、导入，并保存到手机。</p></div></section>
+  <section className="source-import panel">
+   <div><span className="eyebrow">LOCAL IMPORT</span><h2>把已经导出的视频，存进手机。</h2><p>由你选择来源文件和保存位置，复制过程只在手机本地进行，不扫描其他 APP 私有目录。</p></div>
+   <div className="source-actions"><button className="button-primary" onClick={importFile}><FolderOpen {...iconProps}/>导入并保存到手机</button><button className="button-secondary" onClick={playFile}><Play {...iconProps}/>打开本地视频</button></div>
+  </section>
+  <div className="source-grid">{videoSources.map((item,index)=><article className="source-card" key={item.name}><span className="source-number">{String(index+1).padStart(2,'0')}</span><div className="source-card-copy"><h2>{item.name}</h2><span className="source-mode">{item.mode}</span><p>{item.detail}</p></div><button className="button-secondary" onClick={()=>openSite(item)}><Globe {...iconProps}/>打开平台网页<ArrowUpRight size={18} aria-hidden="true"/></button></article>)}</div>
+  <p className="source-disclaimer"><ShieldCheck size={19} aria-hidden="true"/>不绕过 DRM、付费限制或平台权限。网页可播放不代表可以作为本地文件保存；无法独立播放时请留在平台网页。</p>
+ </div>;
+}
+
 function Bookmarks({notify}){
  const [items,setItems]=useState(()=>loadBookmarks()),[draft,setDraft]=useState(null),[error,setError]=useState(''),[query,setQuery]=useState(''),[deleting,setDeleting]=useState(null);
  const edit=item=>{setError('');setDraft(item?{...item}:{id:uid(),name:'',url:''});};
