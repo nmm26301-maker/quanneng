@@ -40,7 +40,7 @@ public final class SystemPlayerActivity extends Activity {
     private long pointA=0,pointB=0;
     private boolean looping=false,ready=false,failed=false,foreground=false,fullscreen=false,scrubbing=false,chromeVisible=true,resumeOnForeground=false;
     private final Handler handler=new Handler(Looper.getMainLooper());
-    private final Runnable hideControls=()->{AccessibilityManager a=(AccessibilityManager)getSystemService(ACCESSIBILITY_SERVICE);if(fullscreen&&ready&&video.isPlaying()&&!scrubbing&&(a==null||!a.isTouchExplorationEnabled()))setChrome(false);};
+    private final Runnable hideControls=()->{AccessibilityManager a=(AccessibilityManager)getSystemService(ACCESSIBILITY_SERVICE);if(fullscreen&&getWindow().getDecorView().hasWindowFocus()&&ready&&video.isPlaying()&&!scrubbing&&(a==null||!a.isTouchExplorationEnabled()))setChrome(false);};
     private final Runnable tick=new Runnable(){public void run(){
         if(ready){int now=video.getCurrentPosition();if(looping&&now>=pointB){seekExact((int)pointA);now=(int)pointA;}
             if(!scrubbing){position.setText(time(now));progress.setProgress(video.getDuration()>0?(int)(1000L*now/video.getDuration()):0);}
@@ -130,7 +130,7 @@ public final class SystemPlayerActivity extends Activity {
     private void updatePoints(){pointALabel.setText(time(pointA));pointBLabel.setText(time(pointB));loopButton.setText(looping?"循环播放中 · 点击关闭":"开启区间循环");loopButton.setSelected(looping);loopButton.setContentDescription(loopButton.getText());}
     private void openSubtitles(){if(!ready){toast("请等待视频加载");return;}try{startActivityForResult(new Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),44);}catch(ActivityNotFoundException e){toast("系统未找到文件选择器");}}
     @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);root.post(this::sizePlayer);}
-    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused&&fullscreen)applySystemBars();}
+    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(fullscreen){if(focused){applySystemBars();setChrome(true);}else handler.removeCallbacks(hideControls);}}
     @Override public void onBackPressed(){if(fullscreen){setFullscreen(false);return;}super.onBackPressed();}
     private void seekExact(int value){try{if(media!=null)media.seekTo((long)value,MediaPlayer.SEEK_CLOSEST);else video.seekTo(value);}catch(IllegalStateException error){toast("视频尚未准备好，请稍后重试");}}
     private void clearLoop(){looping=false;updatePoints();}
