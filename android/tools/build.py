@@ -3,7 +3,7 @@
 import argparse, os, pathlib, shutil, subprocess, zipfile, xml.etree.ElementTree as ET
 from dependencies import prepare
 root=pathlib.Path(__file__).resolve().parents[2]
-p=argparse.ArgumentParser();p.add_argument('--sdk',required=True);p.add_argument('--keystore',required=True);p.add_argument('--out',required=True);p.add_argument('--compiler-jar');args=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--sdk',required=True);p.add_argument('--keystore',required=True);p.add_argument('--out',required=True);p.add_argument('--compiler-jar');p.add_argument('--abi',choices=['arm64-v8a','x86_64'],default='arm64-v8a');args=p.parse_args()
 sdk=pathlib.Path(args.sdk).resolve();tools=sdk/'android-15';platform=sdk/'android-35'/'android.jar'
 for f in [tools/'aapt2',tools/'zipalign',tools/'apksigner',tools/'d8',platform]:
  if not f.is_file():raise SystemExit(f'Missing SDK component: {f}')
@@ -16,7 +16,7 @@ for name in ['classes','dex','generated']:
  directory.mkdir()
 def run(*cmd):subprocess.run([str(x) for x in cmd],check=True)
 source=root/'android'/'app'/'src'/'main'
-libraries=prepare(sdk)
+libraries=prepare(sdk,args.abi)
 library_resources=[]
 library_packages=[]
 for library in libraries:
@@ -29,7 +29,9 @@ for library in libraries:
  run(tools/'aapt2','compile','--dir',library/'res','-o',resource)
  library_resources.append(resource)
 run(tools/'aapt2','compile','--dir',source/'res','-o',build/'resources.zip')
-run(tools/'aapt2','link','-o',build/'base.apk','-I',platform,'--manifest',source/'AndroidManifest.xml','--java',build/'generated','--extra-packages',':'.join(library_packages),'--min-sdk-version','26','--target-sdk-version','35','-A',web,*library_resources,build/'resources.zip')
+overlay_args=[]
+for resource in library_resources+[build/'resources.zip']:overlay_args.extend(['-R',resource])
+run(tools/'aapt2','link','--auto-add-overlay','-o',build/'base.apk','-I',platform,'--manifest',source/'AndroidManifest.xml','--java',build/'generated','--extra-packages',':'.join(library_packages),'--min-sdk-version','26','--target-sdk-version','35','-A',web,*overlay_args)
 java=sorted((source/'java').rglob('*.java'))+sorted((build/'generated').rglob('*.java'))
 compiler=['java','-jar',args.compiler_jar] if args.compiler_jar else ['javac']
 classpath=os.pathsep.join(str(x) for x in [platform]+[library/'classes.jar' for library in libraries])
@@ -37,6 +39,8 @@ run(*compiler,'-encoding','UTF-8','-source','8','-target','8','-classpath',class
 run(tools/'d8','--lib',platform,'--min-api','26','--output',build/'dex',*sorted((build/'classes').rglob('*.class')),*[library/'classes.jar' for library in libraries])
 with zipfile.ZipFile(build/'base.apk','a',compression=zipfile.ZIP_DEFLATED) as apk:
  for dex in (build/'dex').glob('*.dex'):apk.write(dex,dex.name)
+ for library in libraries:
+  for native in (library/'jni'/args.abi).glob('*.so'):apk.write(native,'lib/'+args.abi+'/'+native.name)
 run(tools/'zipalign','-f','4',build/'base.apk',build/'aligned.apk')
 key=pathlib.Path(args.keystore).resolve();key.parent.mkdir(parents=True,exist_ok=True)
 password=os.environ.get('QUANNENG_STORE_PASSWORD','android')

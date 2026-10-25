@@ -208,5 +208,75 @@
     "url": "https://repo.maven.apache.org/maven2/org/jspecify/jspecify/1.0.0/jspecify-1.0.0.jar",
     "extension": "jar",
     "sha256": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab"
+  },
+  {
+    "name": "ytdlp-library",
+    "version": "0.18.1",
+    "extension": "aar",
+    "url": "https://repo.maven.apache.org/maven2/io/github/junkfood02/youtubedl-android/library/0.18.1/library-0.18.1.aar",
+    "sha256": "579b5fb480892b1abc2b218c2089699d52759cc8d7ba256bf876453f0365faef"
+  },
+  {
+    "name": "ytdlp-common",
+    "version": "0.18.1",
+    "extension": "aar",
+    "url": "https://repo.maven.apache.org/maven2/io/github/junkfood02/youtubedl-android/common/0.18.1/common-0.18.1.aar",
+    "sha256": "e0c0530bdbdf203e1598e900085d3582e27360731872872f3a67f23a9b24c0b5"
+  },
+  {
+    "name": "ytdlp-ffmpeg",
+    "version": "0.18.1",
+    "extension": "aar",
+    "url": "https://repo.maven.apache.org/maven2/io/github/junkfood02/youtubedl-android/ffmpeg/0.18.1/ffmpeg-0.18.1.aar",
+    "sha256": "0a87ffa6cf912b0fe76c1a99b9107f543ee2f247935fae2c71f0822eb7bc5f49"
+  },
+  {
+    "name": "jackson-databind",
+    "version": "2.18.3",
+    "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.18.3/jackson-databind-2.18.3.jar",
+    "extension": "jar",
+    "sha256": "510bdda75a7a6186c5bf33b851239488a1450906ae5757121f2e1cc48a7e108f"
+  },
+  {
+    "name": "jackson-core",
+    "version": "2.18.3",
+    "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-core/2.18.3/jackson-core-2.18.3.jar",
+    "extension": "jar",
+    "sha256": "056bc4d3e5e53ce821450fa97b3f9e0f8dde125cf6da6884353bb1f09582e1d9"
+  },
+  {
+    "name": "jackson-annotations",
+    "version": "2.18.3",
+    "url": "https://repo.maven.apache.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.18.3/jackson-annotations-2.18.3.jar",
+    "extension": "jar",
+    "sha256": "8aa5740d80b5a5025508b41bbadbaa1fb3772267c628b2e30681a4f45f8b8931"
+  },
+  {
+    "name": "commons-io",
+    "version": "2.18.0",
+    "url": "https://repo.maven.apache.org/maven2/commons-io/commons-io/2.18.0/commons-io-2.18.0.jar",
+    "extension": "jar",
+    "sha256": "f3ca0f8d63c40e23a56d54101c60d5edee136b42d84bfb85bc7963093109cf8b"
+  },
+  {
+    "name": "commons-compress",
+    "version": "1.27.1",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/commons/commons-compress/1.27.1/commons-compress-1.27.1.jar",
+    "extension": "jar",
+    "sha256": "293d80f54b536b74095dcd7ea3cf0a29bbfc3402519281332495f4420d370d16"
+  },
+  {
+    "name": "commons-codec",
+    "version": "1.17.1",
+    "url": "https://repo.maven.apache.org/maven2/commons-codec/commons-codec/1.17.1/commons-codec-1.17.1.jar",
+    "extension": "jar",
+    "sha256": "f9f6cb103f2ddc3c99a9d80ada2ae7bf0685111fd6bffccb72033d1da4e6ff23"
+  },
+  {
+    "name": "commons-lang3",
+    "version": "3.17.0",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/commons/commons-lang3/3.17.0/commons-lang3-3.17.0.jar",
+    "extension": "jar",
+    "sha256": "6ee731df5c8e5a2976a1ca023b6bb320ea8d3539fbe64c8a1d5cb765127c33b4"
   }
 ]

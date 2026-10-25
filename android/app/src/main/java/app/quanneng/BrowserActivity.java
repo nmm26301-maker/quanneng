@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** 网页媒体观察；只接受候选数据，网页无法调用应用功能，Cookie 仅在本机内存使用。 */
-public final class BrowserActivity extends Activity {
+public final class BrowserActivity extends PrivateActivity {
     private WebView web;
     private Button mediaButton;
     private TextView note;
@@ -65,7 +65,7 @@ public final class BrowserActivity extends Activity {
             }
             @Override public void onPageFinished(WebView view,String url){address.setText(url);scan(false);}
         });
-        String url=getIntent().getStringExtra("url");if(MainActivity.isHttps(url))web.loadUrl(url);else finish();
+        String url=getIntent().getStringExtra("url");if(MainActivity.isHttps(url))whenUnlocked(()->web.loadUrl(url));else finish();
     }
     private void configureDiscovery(){
         advanced=WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)&&WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
@@ -128,11 +128,11 @@ public final class BrowserActivity extends Activity {
     private void showChoices(){
         if(media.isEmpty()){
             String message=encrypted?"网页正在使用受保护媒体，无法作为普通视频地址转播。可继续在网页观看。":playing||blob?"已确认网页视频加载，但暂未取得可独立播放的地址。可以继续在网页观看；这类媒体不保证能转到原生播放器。":"尚未发现视频请求。请先点击网页中的播放按钮，再检测。";
-            new AlertDialog.Builder(this).setTitle("暂未取得转播地址").setMessage(message).setPositiveButton("继续网页播放",null).show();return;
+            new PrivateDialogBuilder(this).setTitle("暂未取得转播地址").setMessage(message).setPositiveButton("继续网页播放",null).show();return;
         }
         final ArrayList<String> choices=new ArrayList<>(media);choices.sort(Comparator.comparingInt(u->MediaCandidatePolicy.priority(u,contexts.containsKey(u)?contexts.get(u).optString("mime",""):"")));
         String[] names=new String[choices.size()];for(int i=0;i<names.length;i++){String u=choices.get(i);names[i]=(i+1)+" · "+(MediaCandidatePolicy.mime(u,contexts.containsKey(u)?contexts.get(u).optString("mime",""):"").contains("mpegurl")?"HLS":MediaCandidatePolicy.role(u).equals("dash")?"DASH":"视频")+"\n"+(u.length()>130?u.substring(0,130)+"…":u);}
-        new AlertDialog.Builder(this).setTitle("在全能中播放").setItems(names,(dialog,index)->{
+        new PrivateDialogBuilder(this).setTitle("在全能中播放").setItems(names,(dialog,index)->{
             String value=choices.get(index);JSONObject context=contexts.get(value);
             Intent intent=new Intent(this,MainActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,value).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
             if(context!=null)intent.putExtra("mediaContext",context.toString());
@@ -144,6 +144,8 @@ public final class BrowserActivity extends Activity {
     private void toast(String text){runOnUiThread(()->Toast.makeText(this,text,Toast.LENGTH_LONG).show());}
     @Override public void onBackPressed(){if(customView!=null)hideCustomView();else if(web.canGoBack())web.goBack();else super.onBackPressed();}
     @Override protected void onPause(){if(web!=null)web.onPause();super.onPause();}
-    @Override protected void onResume(){super.onResume();if(web!=null)web.onResume();}
+    @Override protected void onResume(){super.onResume();if(web!=null&&privateReady())web.onResume();}
+    @Override protected void onPrivateUnlocked(){if(web!=null)web.onResume();}
+    @Override protected void onPrivateLocked(){if(web!=null){web.onPause();web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause())",null);for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("pause");}catch(RuntimeException ignored){}}}
     @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);hideCustomView();frames.clear();requests.clear();contexts.clear();if(web!=null)web.destroy();super.onDestroy();}
 }

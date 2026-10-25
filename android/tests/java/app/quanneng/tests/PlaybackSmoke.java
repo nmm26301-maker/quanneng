@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class PlaybackSmoke extends Instrumentation {
     @Override public void onCreate(Bundle arguments){super.onCreate(arguments);start();}
     @Override public void onStart(){
-        Bundle result=new Bundle();
+        PrivateTestAccess.install(this);Bundle result=new Bundle();
         try{
             Activity hls=open(Intent.ACTION_SEND,Uri.parse("https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"));awaitPlayable(hls);report("GSY + Media3 HLS video decoded and position advanced");runOnMainSync(hls::finish);SystemClock.sleep(300);
             Activity dash=open(Intent.ACTION_SEND,Uri.parse("https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd"));awaitPlayable(dash);report("GSY + Media3 DASH video decoded and position advanced");runOnMainSync(dash::finish);SystemClock.sleep(300);
@@ -32,7 +32,7 @@ public final class PlaybackSmoke extends Instrumentation {
         Intent intent=new Intent().setComponent(new ComponentName("app.quanneng","app.quanneng.MainActivity")).setAction(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
         if(Intent.ACTION_SEND.equals(action))intent.setType("text/plain").putExtra(Intent.EXTRA_TEXT,uri.toString());else intent.setDataAndType(uri,"video/mp4");
         runOnMainSync(()->getTargetContext().startActivity(intent));Activity player=waitForMonitorWithTimeout(monitor,45000);removeMonitor(monitor);
-        if(player==null)throw new AssertionError("Main app did not route media into native player");return player;
+        if(player==null)throw new AssertionError("Main app did not route media into native player");PrivateTestAccess.awaitUnlocked(this,player);return player;
     }
     private long[] state(Activity activity){AtomicReference<long[]> result=new AtomicReference<>();runOnMainSync(()->{PlaybackView video=new PlaybackView(activity.findViewById(1000));try{Object mp=field(activity,"media");result.set(new long[]{video.getDuration(),video.getCurrentPosition(),mp==null?0:((Number)mp.getClass().getMethod("getVideoWidth").invoke(mp)).longValue(),mp==null?0:((Number)mp.getClass().getMethod("getVideoHeight").invoke(mp)).longValue()});}catch(Exception error){result.set(new long[]{0,0,0,0});}});return result.get();}
     private void awaitPlayable(Activity activity)throws Exception{

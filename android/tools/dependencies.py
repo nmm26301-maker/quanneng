@@ -1,14 +1,14 @@
 """Resolve a reviewed, SHA-256-pinned subset of the GSY/Media3 dependency graph."""
 import hashlib,json,pathlib,urllib.request,zipfile,concurrent.futures,shutil
 
-def prepare(sdk):
+def prepare(sdk,abi='arm64-v8a'):
     lock=pathlib.Path(__file__).resolve().parents[1]/'dependencies.lock.json'
     artifacts=json.loads(lock.read_text())
     cache=pathlib.Path(sdk)/'quanneng-dependencies';cache.mkdir(parents=True,exist_ok=True)
     def fetch(item):
         archive=cache/(item['name']+'.'+item['extension'])
         if not archive.exists():
-            with urllib.request.urlopen(item['url'],timeout=60) as response:data=response.read(32*1024*1024)
+            with urllib.request.urlopen(item['url'],timeout=90) as response:data=response.read(512*1024*1024)
             if hashlib.sha256(data).hexdigest()!=item['sha256']:raise RuntimeError('Dependency checksum mismatch: '+item['name'])
             archive.write_bytes(data)
         if hashlib.sha256(archive.read_bytes()).hexdigest()!=item['sha256']:raise RuntimeError('Cached dependency checksum mismatch: '+item['name'])
@@ -17,6 +17,6 @@ def prepare(sdk):
         else:
             with zipfile.ZipFile(archive) as source:
                 for entry in source.namelist():
-                    if entry in ['classes.jar','AndroidManifest.xml'] or entry.startswith('res/'):source.extract(entry,directory)
+                    if entry in ['classes.jar','AndroidManifest.xml'] or entry.startswith('res/') or entry.startswith('jni/'+abi+'/'):source.extract(entry,directory)
         return directory
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:return list(pool.map(fetch,artifacts))

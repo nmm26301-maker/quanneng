@@ -8,7 +8,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,7 +40,7 @@ jobs:
           echo "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0  $RUNNER_TEMP/platform.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/build-tools.zip" -d "$RUNNER_TEMP/quanneng-sdk"
           unzip -q "$RUNNER_TEMP/platform.zip" -d "$RUNNER_TEMP/quanneng-sdk"
-      - run: python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-debug.apk"
+      - run: python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-debug.apk" --abi x86_64
       - uses: actions/upload-artifact@v4
         with:
           name: Quanneng-debug
@@ -74,6 +74,9 @@ jobs:
             # Same precondition as Android CTS: test app controls after OS education.
             adb shell settings put secure immersive_mode_confirmations confirmed
             adb logcat -c
+            timeout 180s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.SecuritySmoke | tee "$RUNNER_TEMP/security-smoke.txt"
+            adb logcat -d -v brief > "$RUNNER_TEMP/security-logcat.txt"
+            grep -q QUANNENG_SECURITY_OK "$RUNNER_TEMP/security-smoke.txt"
             timeout 300s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.PlaybackSmoke | tee "$RUNNER_TEMP/playback-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/playback-logcat.txt"
             tail -n 180 "$RUNNER_TEMP/playback-logcat.txt"
@@ -81,6 +84,9 @@ jobs:
             timeout 120s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.BrowserSmoke | tee "$RUNNER_TEMP/browser-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/browser-logcat.txt"
             grep -q QUANNENG_BROWSER_OK "$RUNNER_TEMP/browser-smoke.txt"
+            timeout 300s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.TransferSmoke | tee "$RUNNER_TEMP/transfer-smoke.txt"
+            adb logcat -d -v brief > "$RUNNER_TEMP/transfer-logcat.txt"
+            grep -q QUANNENG_TRANSFER_OK "$RUNNER_TEMP/transfer-smoke.txt"
       - name: Save Android playback test diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -91,4 +97,8 @@ jobs:
             ${{ runner.temp }}/playback-logcat.txt
             ${{ runner.temp }}/browser-smoke.txt
             ${{ runner.temp }}/browser-logcat.txt
+            ${{ runner.temp }}/security-smoke.txt
+            ${{ runner.temp }}/security-logcat.txt
+            ${{ runner.temp }}/transfer-smoke.txt
+            ${{ runner.temp }}/transfer-logcat.txt
           if-no-files-found: ignore

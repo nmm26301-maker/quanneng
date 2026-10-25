@@ -17,7 +17,7 @@ import org.json.*;
 public final class BrowserSmoke extends Instrumentation {
     @Override public void onCreate(Bundle args){super.onCreate(args);start();}
     @Override public void onStart(){
-        Bundle result=new Bundle();
+        PrivateTestAccess.install(this);Bundle result=new Bundle();
         try{
             Activity browser=open("app.quanneng.BrowserActivity",new Intent().putExtra("url","https://page.fixture.test/index"));
             WebView web=(WebView)field(browser,"web");
@@ -52,12 +52,12 @@ public final class BrowserSmoke extends Instrumentation {
             report("Cross-origin iframe, extensionless fetch/XHR sources and actual blob playback detected");runOnMainSync(browser::finish);SystemClock.sleep(300);
             Activity app=open("app.quanneng.MainActivity",new Intent());WebView ui=(WebView)field(app,"web");await(ui,"!!document.querySelector('.bottom-nav')");
             if(!"true".equals(js(ui,"!document.body.innerText.includes('AI')&&typeof window.Quanneng.requestAI==='undefined'")))throw new AssertionError("AI feature or bridge remains");
-            js(ui,"document.querySelectorAll('.bottom-nav button')[1].click();true");await(ui,"!!document.querySelector('.bookmark-intro')");
+            js(ui,"Array.from(document.querySelectorAll('.bottom-nav button')).find(b=>b.textContent.includes('网址收藏')).click();true");await(ui,"!!document.querySelector('.bookmark-intro')");
             js(ui,"document.querySelector('.bookmark-intro button').click();true");await(ui,"!!document.querySelector('dialog[open]')");
             input(ui,0,"演示网址");input(ui,1,"https://example.com/watch");js(ui,"document.querySelector('dialog form').requestSubmit();true");await(ui,"document.querySelector('.bookmark-card h3')?.textContent==='演示网址'");
             js(ui,"document.querySelector('.bookmark-tools button').click();true");await(ui,"!!document.querySelector('dialog[open]')");input(ui,0,"我的收藏");js(ui,"document.querySelector('dialog form').requestSubmit();true");await(ui,"document.querySelector('.bookmark-card h3')?.textContent==='我的收藏'");
             capture();runOnMainSync(app::finish);SystemClock.sleep(300);
-            Activity reopened=open("app.quanneng.MainActivity",new Intent());ui=(WebView)field(reopened,"web");await(ui,"!!document.querySelector('.bottom-nav')");js(ui,"document.querySelectorAll('.bottom-nav button')[1].click();true");await(ui,"document.querySelector('.bookmark-card h3')?.textContent==='我的收藏'");
+            Activity reopened=open("app.quanneng.MainActivity",new Intent());ui=(WebView)field(reopened,"web");await(ui,"!!document.querySelector('.bottom-nav')");js(ui,"Array.from(document.querySelectorAll('.bottom-nav button')).find(b=>b.textContent.includes('网址收藏')).click();true");await(ui,"document.querySelector('.bookmark-card h3')?.textContent==='我的收藏'");
             js(ui,"document.querySelectorAll('.bookmark-tools button')[1].click();true");await(ui,"!!document.querySelector('dialog[open]')");js(ui,"Array.from(document.querySelectorAll('dialog button')).find(b=>b.textContent==='确认删除').click();true");await(ui,"!document.querySelector('.bookmark-card')&&localStorage.getItem('quanneng-bookmarks-v1')==='[]'");
             report("AI UI and native request bridge removed; bookmark add, rename, restart persistence and delete verified");runOnMainSync(reopened::finish);
             result.putString("stream","QUANNENG_BROWSER_OK\n");finish(Activity.RESULT_OK,result);
@@ -65,7 +65,7 @@ public final class BrowserSmoke extends Instrumentation {
     }
     private String page(){return "<!doctype html><video muted loop playsinline></video><iframe src='https://frame.fixture.test/player'></iframe><script>fetch('https://media.fixture.test/stream?id=fetch').then(r=>r.blob()).then(b=>{let v=document.querySelector('video');v.src=URL.createObjectURL(b);v.play()});let x=new XMLHttpRequest();x.open('GET','https://media.fixture.test/stream?id=xhr');x.responseType='blob';x.send();</script>";}
     private String frame(){return "<!doctype html><video muted loop playsinline></video><script>fetch('https://media.fixture.test/stream?id=iframe').then(r=>r.blob()).then(b=>{let v=document.querySelector('video');v.src=URL.createObjectURL(b);v.play()});</script>";}
-    private Activity open(String name,Intent intent){intent.setComponent(new ComponentName("app.quanneng",name)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);return startActivitySync(intent);}
+    private Activity open(String name,Intent intent){intent.setComponent(new ComponentName("app.quanneng",name)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);Activity activity=startActivitySync(intent);try{PrivateTestAccess.awaitUnlocked(this,activity);}catch(Exception e){throw new RuntimeException(e);}return activity;}
     private Object field(Activity a,String name)throws Exception{Field f=a.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(a);}
     private int count(Activity a){AtomicReference<Integer> value=new AtomicReference<>(0);runOnMainSync(()->{try{value.set(((List<?>)field(a,"media")).size());}catch(Exception error){}});return value.get();}
     private String js(WebView web,String script)throws Exception{CountDownLatch done=new CountDownLatch(1);AtomicReference<String> value=new AtomicReference<>();runOnMainSync(()->web.evaluateJavascript(script,v->{value.set(v);done.countDown();}));if(!done.await(8,TimeUnit.SECONDS))throw new AssertionError("WebView JS timeout");return value.get();}

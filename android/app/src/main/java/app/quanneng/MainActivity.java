@@ -17,7 +17,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /** 全能主界面：可信离线前端、文件选择及全屏桥接。 */
-public final class MainActivity extends Activity {
+public final class MainActivity extends PrivateActivity {
     private static final String ORIGIN = "https://appassets.androidplatform.net/assets/";
     private static final int PICK_FILE = 41;
     private static final int PICK_NATIVE_VIDEO = 42;
@@ -44,7 +44,7 @@ public final class MainActivity extends Activity {
         root.addView(web, new FrameLayout.LayoutParams(-1, -1));
         imported = new ImportedVideoController(this);
         configureWeb();
-        receiveIntent(getIntent());
+        whenUnlocked(()->{receiveIntent(getIntent());deliverPendingUrl();});
         web.loadUrl(ORIGIN + "index.html");
     }
     private void configureWeb() {
@@ -66,7 +66,7 @@ public final class MainActivity extends Activity {
                 if (path == null || !path.startsWith("/assets/") || path.contains("..")) return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
                 try {
                     String name = path.substring(8);
-                    String type = name.endsWith(".js") ? "text/javascript" : name.endsWith(".css") ? "text/css" : name.endsWith(".svg") ? "image/svg+xml" : "text/html";
+                    String type = name.endsWith(".js") ? "text/javascript" : name.endsWith(".css") ? "text/css" : name.endsWith(".svg") ? "image/svg+xml" : name.endsWith(".jpg")?"image/jpeg":name.endsWith(".png")?"image/png":"text/html";
                     Map<String,String> headers = new HashMap<>();
                     headers.put("X-Content-Type-Options", "nosniff");
                     return new WebResourceResponse(type, "UTF-8", 200, "OK", headers, getAssets().open(name));
@@ -106,7 +106,7 @@ public final class MainActivity extends Activity {
             }
             @Override public void onHideCustomView() { hideFullscreen(); }
             @Override public boolean onJsConfirm(WebView view,String url,String message,JsResult result) {
-                new AlertDialog.Builder(MainActivity.this).setMessage(message).setPositiveButton("确定",(d,w)->result.confirm()).setNegativeButton("取消",(d,w)->result.cancel()).setOnCancelListener(d->result.cancel()).show(); return true;
+                new PrivateDialogBuilder(MainActivity.this).setMessage(message).setPositiveButton("确定",(d,w)->result.confirm()).setNegativeButton("取消",(d,w)->result.cancel()).setOnCancelListener(d->result.cancel()).show(); return true;
             }
         });
     }
@@ -118,7 +118,7 @@ public final class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(0);
         if (fullCallback != null) { fullCallback.onCustomViewHidden(); fullCallback = null; }
     }
-    private boolean trusted() { return web != null && web.getUrl() != null && web.getUrl().startsWith(ORIGIN); }
+    private boolean trusted() { return privateReady() && web != null && web.getUrl() != null && web.getUrl().startsWith(ORIGIN); }
     static boolean isHttps(String value) {
         if (value == null) return false;
         Uri uri = Uri.parse(value);
@@ -131,6 +131,9 @@ public final class MainActivity extends Activity {
     private void toast(String text) { runOnUiThread(()->Toast.makeText(this,text,Toast.LENGTH_LONG).show()); }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
+        whenUnlocked(()->handlePrivateResult(request,result,data));
+    }
+    private void handlePrivateResult(int request,int result,Intent data){
         if (imported != null && imported.onActivityResult(request,result,data)) return;
         if (request == PICK_NATIVE_VIDEO && result == RESULT_OK && data != null) {
             ArrayList<String> queue=new ArrayList<>();
@@ -148,8 +151,7 @@ public final class MainActivity extends Activity {
         }
     }
     @Override protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent); setIntent(intent); receiveIntent(intent);
-        deliverPendingUrl();
+        super.onNewIntent(intent); setIntent(intent);whenUnlocked(()->{receiveIntent(intent);deliverPendingUrl();});
     }
     private void deliverPendingUrl() {
         if (pendingUrl == null || !trusted()) return;
@@ -189,7 +191,7 @@ public final class MainActivity extends Activity {
         if (fullscreen != null) { hideFullscreen(); return; }
         web.evaluateJavascript("window.quannengBack?window.quannengBack():false", result->{if (!"true".equals(result)) MainActivity.super.onBackPressed();});
     }
-    @Override protected void onResume(){super.onResume();foreground=true;}
+    @Override protected void onResume(){super.onResume();foreground=privateReady();}
     @Override protected void onPause() {
         foreground=false;
         if (!pipRequested && !isInPictureInPictureMode()) web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause())",null);
@@ -205,10 +207,15 @@ public final class MainActivity extends Activity {
         if(imported!=null)imported.close();
         web.removeJavascriptInterface("Quanneng"); web.destroy(); super.onDestroy();
     }
+    @Override protected void onPrivateUnlocked(){foreground=true;if(web!=null){web.onResume();deliverPendingUrl();}}
+    @Override protected void onPrivateLocked(){foreground=false;if(web!=null)web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause())",null);}
     public final class Bridge {
+        @JavascriptInterface public void openTransfers(){runOnUiThread(()->{if(trusted())startActivity(new Intent(MainActivity.this,TransferActivity.class));});}
+        @JavascriptInterface public void openSecuritySettings(){runOnUiThread(()->{if(trusted())changePrivatePassword();});}
+        @JavascriptInterface public void lockApp(){runOnUiThread(()->{if(trusted())lockPrivateApp();});}
         @JavascriptInterface public void frontendReady() { runOnUiThread(()->deliverPendingUrl()); }
         @JavascriptInterface public void openWebsite(String url) { runOnUiThread(()->{if(trusted())openBrowser(url);}); }
-        @JavascriptInterface public void enterPip() { runOnUiThread(()->{if(!trusted())return;try{pipRequested=true;web.evaluateJavascript("document.documentElement.classList.add('pip-mode')",null);if(!enterPictureInPictureMode(new PictureInPictureParams.Builder().setAspectRatio(new Rational(16,9)).build()))throw new IllegalStateException();}catch(RuntimeException e){pipRequested=false;web.evaluateJavascript("document.documentElement.classList.remove('pip-mode')",null);toast("此设备不支持画中画");}}); }
+        @JavascriptInterface public void enterPip(){runOnUiThread(()->{if(trusted())toast("私人模式下暂不支持画中画");});}
         @JavascriptInterface public void systemPlay(String url) { runOnUiThread(()->{if(trusted()&&isHttps(url)){try{JSONObject request=new JSONObject();request.put("url",url);launchMedia(request);}catch(JSONException ignored){}}}); }
         @JavascriptInterface public void playMedia(String raw) {runOnUiThread(()->{if(!trusted()||raw==null||raw.length()>100000)return;try{launchMedia(new JSONObject(raw));}catch(Exception error){toast("视频地址无效，请重新打开原网页");}});}
         @JavascriptInterface public void openLocalVideo() {runOnUiThread(()->{if(!trusted())return;try{Intent select=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("video/*").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);startActivityForResult(select,PICK_NATIVE_VIDEO);}catch(ActivityNotFoundException error){toast("系统未找到文件选择器");}});}

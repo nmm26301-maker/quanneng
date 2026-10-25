@@ -22,7 +22,7 @@ import org.json.*;
 import java.util.*;
 
 /** 默认 GSYVideoPlayer + Media3 播放页；保留全能的全屏、跳转和循环控制。 */
-public final class SystemPlayerActivity extends Activity {
+public final class SystemPlayerActivity extends PrivateActivity {
     private android.window.OnBackInvokedCallback backCallback;
     private MatureVideoView video;
     private View touchLayer;
@@ -55,7 +55,7 @@ public final class SystemPlayerActivity extends Activity {
     @Override public void onCreate(Bundle state){
         super.onCreate(state);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         buildPlayer();configureMedia();if(Build.VERSION.SDK_INT>=33){backCallback=()->{if(fullscreen)setFullscreen(false);else finish();};getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,backCallback);}
-        queue=getIntent().getStringArrayListExtra("queue");current=getIntent().getData();if(current==null){finish();return;}load(current,true);
+        queue=getIntent().getStringArrayListExtra("queue");current=getIntent().getData();if(current==null){finish();return;}whenUnlocked(()->load(current,true));
     }
     private void buildPlayer(){
         root=new LinearLayout(this);root.setOrientation(1);root.setBackgroundColor(PlayerUi.BG);setContentView(root);
@@ -174,7 +174,7 @@ public final class SystemPlayerActivity extends Activity {
         if(failed||isFinishing())return;failed=true;ready=false;setJumpsEnabled(false);loading.setVisibility(View.GONE);playButton.setEnabled(false);progress.setEnabled(false);setChrome(true);video.stopPlayback();
         String reason=code==-1010?"设备不支持此视频编码。":code==-1007?"视频数据格式不正确或文件损坏。":code==-110?"加载超时，请检查网络和链接是否过期。":"视频地址已失效、需要来源授权，或网络连接失败。";
         position.setText(reason);
-        AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("视频加载失败").setMessage(reason+"\n可以重新加载，或返回原网页重新获取地址。\n诊断代码："+code)
+        AlertDialog.Builder dialog=new PrivateDialogBuilder(this).setTitle("视频加载失败").setMessage(reason+"\n可以重新加载，或返回原网页重新获取地址。\n诊断代码："+code)
             .setPositiveButton("重试",(d,w)->load(current,true)).setNegativeButton("返回",(d,w)->finish());
         String page=getIntent().getStringExtra("sourcePage");
         if(MainActivity.isHttps(page))dialog.setNeutralButton("打开原网页",(d,w)->{startActivity(new Intent(this,BrowserActivity.class).putExtra("url",page));finish();});
@@ -185,9 +185,11 @@ public final class SystemPlayerActivity extends Activity {
         if(getIntent().getBooleanExtra("autoNext",true)&&queue!=null){int index=queue.indexOf(current.toString());if(index>=0&&index+1<queue.size()){getIntent().putExtra("position",0);load(Uri.parse(queue.get(index+1)),false);return;}}
         updatePlay();
     }
-    private void chooseSpeed(){if(!ready||media==null)return;String[] labels={"0.5 倍速","0.75 倍速","1.0 倍速","1.25 倍速","1.5 倍速","2.0 倍速","3.0 倍速"};float[] values={.5f,.75f,1f,1.25f,1.5f,2f,3f};new AlertDialog.Builder(this).setTitle("播放速度").setItems(labels,(d,i)->{try{boolean wasPlaying=video.isPlaying();media.setSpeed(values[i],1f);if(!wasPlaying)video.pause();speedButton.setText(values[i]+"×");setChrome(true);}catch(RuntimeException e){toast("此格式不支持所选速度");}}).show();}
+    private void chooseSpeed(){if(!ready||media==null)return;String[] labels={"0.5 倍速","0.75 倍速","1.0 倍速","1.25 倍速","1.5 倍速","2.0 倍速","3.0 倍速"};float[] values={.5f,.75f,1f,1.25f,1.5f,2f,3f};new PrivateDialogBuilder(this).setTitle("播放速度").setItems(labels,(d,i)->{try{boolean wasPlaying=video.isPlaying();media.setSpeed(values[i],1f);if(!wasPlaying)video.pause();speedButton.setText(values[i]+"×");setChrome(true);}catch(RuntimeException e){toast("此格式不支持所选速度");}}).show();}
     @Override protected void onActivityResult(int request,int result,Intent data){
-        super.onActivityResult(request,result,data);if(request!=44||result!=RESULT_OK||data==null||data.getData()==null||!ready)return;
+        super.onActivityResult(request,result,data);whenUnlocked(()->handleSubtitleResult(request,result,data));
+    }
+    private void handleSubtitleResult(int request,int result,Intent data){if(request!=44||result!=RESULT_OK||data==null||data.getData()==null||!ready)return;
         try{Uri uri=data.getData();String name=displayName(uri).toLowerCase(Locale.ROOT);String mime=name.endsWith(".vtt")?"text/vtt":"application/x-subrip";
             video.addSubtitle(uri,mime);toast("已导入字幕，在画面下方显示");
         }catch(Exception error){toast("字幕导入失败，请选择 UTF-8 的 SRT 或 VTT 文件");}
@@ -197,7 +199,9 @@ public final class SystemPlayerActivity extends Activity {
     private String time(long ms){long s=Math.max(0,ms/1000);return String.format(Locale.ROOT,"%02d:%02d:%02d",s/3600,s/60%60,s%60);}
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
-    @Override protected void onResume(){super.onResume();foreground=true;if(ready&&resumeOnForeground){video.start();resumeOnForeground=false;}if(fullscreen)applySystemBars();}
+    @Override protected void onResume(){super.onResume();foreground=privateReady();if(foreground&&ready&&resumeOnForeground){video.start();resumeOnForeground=false;}if(fullscreen)applySystemBars();}
     @Override protected void onPause(){foreground=false;resumeOnForeground=ready&&video.isPlaying();video.pause();handler.removeCallbacks(hideControls);super.onPause();}
+    @Override protected void onPrivateUnlocked(){foreground=true;if(ready&&resumeOnForeground){video.start();resumeOnForeground=false;}}
+    @Override protected void onPrivateLocked(){foreground=false;if(video!=null)video.pause();}
     @Override protected void onDestroy(){if(Build.VERSION.SDK_INT>=33&&backCallback!=null)getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);handler.removeCallbacksAndMessages(null);video.stopPlayback();super.onDestroy();}
 }

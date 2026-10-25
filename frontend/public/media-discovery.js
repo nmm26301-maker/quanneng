@@ -55,7 +55,7 @@
     const observer = new PerformanceObserver(list => list.getEntries().forEach(entry => candidate(entry.name)));
     observer.observe({type: 'resource', buffered: true});
   } catch {}
-  try { window.QuannengMedia.onmessage = event => { if (event.data === 'scan') scan(); }; } catch {}
+  try { window.QuannengMedia.onmessage = event => { if (event.data === 'scan') scan(); else if (event.data === 'pause') document.querySelectorAll('video').forEach(video => video.pause()); }; } catch {}
   document.addEventListener('DOMContentLoaded', scan, {once: true});
   scan();
 })();

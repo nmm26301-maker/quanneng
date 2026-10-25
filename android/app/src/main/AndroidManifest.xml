@@ -1,10 +1,12 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.quanneng" android:versionCode="7" android:versionName="0.2.5">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.quanneng" android:versionCode="8" android:versionName="0.2.6">
 <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35"/>
 <uses-permission android:name="android.permission.INTERNET"/>
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
 <uses-feature android:name="android.software.picture_in_picture" android:required="false"/>
-<application android:label="全能" android:icon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false" android:usesCleartextTraffic="false" android:hardwareAccelerated="true" android:supportsRtl="true">
-<activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:configChanges="orientation|screenSize|keyboardHidden|uiMode" android:supportsPictureInPicture="true" android:windowSoftInputMode="adjustResize">
+<application android:name=".PrivateApplication" android:label="全能" android:icon="@drawable/quanneng_icon" android:roundIcon="@drawable/quanneng_icon" android:extractNativeLibs="true" android:theme="@style/AppTheme" android:allowBackup="false" android:usesCleartextTraffic="false" android:hardwareAccelerated="true" android:supportsRtl="true">
+<activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:configChanges="orientation|screenSize|keyboardHidden|uiMode" android:supportsPictureInPicture="false" android:windowSoftInputMode="adjustResize">
 <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
 <intent-filter><action android:name="android.intent.action.SEND"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="text/plain"/></intent-filter>
 <intent-filter><action android:name="android.intent.action.SEND"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="video/*"/></intent-filter>
@@ -13,4 +15,4 @@
 </activity>
 <activity android:name=".BrowserActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden"/>
 <activity android:name=".SystemPlayerActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden"/>
-</application></manifest>
+<activity android:name=".TransferActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden"/><service android:name=".TransferService" android:exported="false" android:foregroundServiceType="dataSync"/><provider android:name=".MediaContentProvider" android:authorities="app.quanneng.media" android:exported="false"/></application></manifest>

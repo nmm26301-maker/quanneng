@@ -101,12 +101,13 @@ public final class ImportedVideoController {
     }
 
     private void copyToPhone(Uri input, Uri output) {
-        AlertDialog progress = new AlertDialog.Builder(activity)
+        AlertDialog progress = new PrivateDialogBuilder(activity)
                 .setTitle("正在保存到手机")
                 .setMessage("请保持应用运行，大文件需要更多时间。")
                 .setCancelable(false)
                 .create();
         progress.show();
+        progress.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
         worker.execute(() -> {
             boolean success = false;
             try (InputStream in = activity.getContentResolver().openInputStream(input);
@@ -138,7 +139,7 @@ public final class ImportedVideoController {
                 message("视频已保存到选择的位置");
                 Intent play = new Intent(activity, SystemPlayerActivity.class)
                         .setData(output).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                activity.startActivity(play);
+                ((PrivateActivity)activity).whenUnlocked(()->activity.startActivity(play));
             });
         });
     }
