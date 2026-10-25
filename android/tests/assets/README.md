@@ -2,4 +2,11 @@
 
 The instrumentation build downloads the public MDN CC0 flower video from https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4 into `flower.mp4`. This fixture is included only in the test APK, never in the user application. Its bytes are not checked into this repository.
 
-`seek-fixture.mp4` 为 CI 使用 FFmpeg color 源生成的 1300 秒纯色视频（160×90，1 fps，每秒关键帧）；不含第三方影视内容。用于实际验证 10 秒、1 分钟、10 分钟双向跳转、边界与连续点击。生成文件只进入隔离测试 APK，不进入生产 APK。FFmpeg / libx264 仅为 CI 工具，未链接或打包进应用。
+`seek-fixture.mp4` 为本项目使用 FFmpeg color 源生成的 1300 秒纯色视频（160×90，1 fps，每秒关键帧）；不含第三方影视内容。用于实际验证 10 秒、1 分钟、10 分钟双向跳转、边界与连续点击。素材已随测试源码提交，CI 无需安装 FFmpeg；该文件只进入隔离测试 APK，不进入生产 APK。FFmpeg / libx264 仅为素材生成工具，未链接或打包进应用。
+
+本项目自制 `seek-fixture.mp4` 纯色视频按 CC0 提供。SHA-256：`b6e225a56ebc53716f7989131f27a525ce4f3bfe7a5d80b1c885771cbedb9c4a`。
+
+复现命令：
+```sh
+ffmpeg -f lavfi -i color=c=0x13221b:s=160x90:r=1 -t 1300 -c:v libx264 -pix_fmt yuv420p -g 1 -movflags +faststart seek-fixture.mp4
+```

@@ -47,7 +47,6 @@ jobs:
       - name: Download public playback fixture and build instrumentation APK
         run: |
           curl --fail --location --retry 3 https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4 -o android/tests/assets/flower.mp4
-          ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=0x13221b:s=160x90:r=1 -t 1300 -c:v libx264 -pix_fmt yuv420p -g 1 -movflags +faststart -y android/tests/assets/seek-fixture.mp4
           python3 android/tools/build-tests.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-tests.apk"
       - name: Set up Android emulator tools
         uses: android-actions/setup-android@035682743ab223ec9c6169af09811dff8247e520

@@ -8,3 +8,5 @@ android/build/
 __pycache__/
 out/
 android/tests/assets/*.mp4
+
+!android/tests/assets/seek-fixture.mp4
