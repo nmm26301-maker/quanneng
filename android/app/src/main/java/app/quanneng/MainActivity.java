@@ -80,10 +80,7 @@ public final class MainActivity extends Activity {
                 return true;
             }
             @Override public void onPageFinished(WebView v, String url) {
-                if (url.startsWith(ORIGIN) && pendingUrl != null) {
-                    String shared = pendingUrl; pendingUrl = null;
-                    web.evaluateJavascript("window.quannengOpenURL&&window.quannengOpenURL(" + JSONObject.quote(shared) + ")", null);
-                }
+                if (url.startsWith(ORIGIN)) deliverPendingUrl();
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
@@ -142,7 +139,7 @@ public final class MainActivity extends Activity {
             if(!queue.isEmpty())startActivityForResult(new Intent(this,SystemPlayerActivity.class).setData(Uri.parse(queue.get(0))).putStringArrayListExtra("queue",queue).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),NATIVE_PLAYER);
         }
         if (request == NATIVE_PLAYER && data != null && trusted()) {
-            try { JSONObject resultData=new JSONObject();resultData.put("url",data.getStringExtra("url"));resultData.put("position",data.getIntExtra("position",0)/1000.0);
+            try { JSONObject resultData=new JSONObject();resultData.put("url",data.getStringExtra("url"));resultData.put("position",data.getIntExtra("position",0)/1000.0);resultData.put("webFallback",data.getBooleanExtra("webFallback",false));
                 web.evaluateJavascript("window.dispatchEvent(new CustomEvent('quanneng-playback',{detail:"+resultData.toString()+"}))",null);
             } catch(JSONException ignored) {}
         }
@@ -152,10 +149,14 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent); setIntent(intent); receiveIntent(intent);
-        if (pendingUrl != null && trusted()) {
-            String value = pendingUrl; pendingUrl = null;
-            web.evaluateJavascript("window.quannengOpenURL&&window.quannengOpenURL("+JSONObject.quote(value)+")",null);
-        }
+        deliverPendingUrl();
+    }
+    private void deliverPendingUrl() {
+        if (pendingUrl == null || !trusted()) return;
+        String value = pendingUrl;
+        web.evaluateJavascript("typeof window.quannengOpenURL==='function'?(window.quannengOpenURL("+JSONObject.quote(value)+"),true):false", result->{
+            if ("true".equals(result) && value.equals(pendingUrl)) pendingUrl=null;
+        });
     }
     private void receiveIntent(Intent intent) {
         if (intent == null) return;
@@ -193,6 +194,7 @@ public final class MainActivity extends Activity {
         web.removeJavascriptInterface("Quanneng"); web.destroy(); super.onDestroy();
     }
     public final class Bridge {
+        @JavascriptInterface public void frontendReady() { runOnUiThread(()->deliverPendingUrl()); }
         @JavascriptInterface public void openWebsite(String url) { runOnUiThread(()->{if(trusted())openBrowser(url);}); }
         @JavascriptInterface public void enterPip() { runOnUiThread(()->{if(!trusted())return;try{pipRequested=true;web.evaluateJavascript("document.documentElement.classList.add('pip-mode')",null);if(!enterPictureInPictureMode(new PictureInPictureParams.Builder().setAspectRatio(new Rational(16,9)).build()))throw new IllegalStateException();}catch(RuntimeException e){pipRequested=false;web.evaluateJavascript("document.documentElement.classList.remove('pip-mode')",null);toast("此设备不支持画中画");}}); }
         @JavascriptInterface public void systemPlay(String url) { runOnUiThread(()->{if(trusted()&&isHttps(url)){try{JSONObject request=new JSONObject();request.put("url",url);launchMedia(request);}catch(JSONException ignored){}}}); }
