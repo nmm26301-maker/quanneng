@@ -59,7 +59,7 @@ public final class SystemPlayerActivity extends Activity {
         LinearLayout names=new LinearLayout(this);names.setOrientation(1);names.setPadding(dp(8),0,0,0);header.addView(names,new LinearLayout.LayoutParams(0,-2,1));
         names.addView(PlayerUi.text(this,"全能  /  正在播放",12,PlayerUi.MUTED));title=PlayerUi.text(this,"",16,PlayerUi.TEXT);title.setSingleLine();title.setEllipsize(TextUtils.TruncateAt.END);names.addView(title);
         videoFrame=new FrameLayout(this);videoFrame.setBackground(PlayerUi.surface(this,Color.BLACK,18));videoFrame.setClipToOutline(true);root.addView(videoFrame);
-        video=new VideoView(this);video.setId(1000);video.setContentDescription("视频画面，点击显示或隐藏全屏控制");FrameLayout.LayoutParams vp=new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER);videoFrame.addView(video,vp);video.setOnClickListener(v->{if(fullscreen)setChrome(!chromeVisible);});
+        video=new VideoView(this);video.setId(1000);video.setContentDescription("视频画面，点击显示或隐藏全屏控制");FrameLayout.LayoutParams vp=new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER);videoFrame.addView(video,vp);video.setOnClickListener(v->{if(fullscreen)setChrome(!chromeVisible);});video.setOnTouchListener((v,event)->{if(event.getAction()==MotionEvent.ACTION_UP)v.performClick();return true;});
         loading=new ProgressBar(this);loading.setIndeterminateTintList(ColorStateList.valueOf(PlayerUi.ACCENT));videoFrame.addView(loading,new FrameLayout.LayoutParams(dp(36),dp(36),Gravity.CENTER));
         buildControls();buildDetails();buildOverlayHeader();
         root.post(this::sizePlayer);root.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol||b-t!=ob-ot)sizePlayer();});
