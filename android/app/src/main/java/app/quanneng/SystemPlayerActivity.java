@@ -9,7 +9,7 @@ import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.media.*;
+import tv.danmaku.ijk.media.exo2.IjkExo2MediaPlayer;
 import android.net.Uri;
 import android.os.*;
 import android.provider.OpenableColumns;
@@ -21,10 +21,10 @@ import android.widget.*;
 import org.json.*;
 import java.util.*;
 
-/** 默认原生播放页。网络媒体通过 Android 媒体栈加载，不受网页跨域策略限制。 */
+/** 默认 GSYVideoPlayer + Media3 播放页；保留全能的全屏、跳转和循环控制。 */
 public final class SystemPlayerActivity extends Activity {
     private android.window.OnBackInvokedCallback backCallback;
-    private VideoView video;
+    private MatureVideoView video;
     private View touchLayer;
     private LinearLayout root,header,controls,overlayHeader,details,fullscreenJumps;
     private ScrollView detailScroll;
@@ -34,7 +34,7 @@ public final class SystemPlayerActivity extends Activity {
     private ImageButton playButton,fullButton;
     private ProgressBar loading;
     private SeekBar progress;
-    private MediaPlayer media;
+    private IjkExo2MediaPlayer media;
     private Uri current;
     private ArrayList<String> queue;
     private final ArrayList<Button> jumpButtons=new ArrayList<>();
@@ -64,7 +64,7 @@ public final class SystemPlayerActivity extends Activity {
         LinearLayout names=new LinearLayout(this);names.setOrientation(1);names.setPadding(dp(8),0,0,0);header.addView(names,new LinearLayout.LayoutParams(0,-2,1));
         names.addView(PlayerUi.text(this,"全能  /  正在播放",12,PlayerUi.MUTED));title=PlayerUi.text(this,"",16,PlayerUi.TEXT);title.setSingleLine();title.setEllipsize(TextUtils.TruncateAt.END);names.addView(title);
         videoFrame=new FrameLayout(this);videoFrame.setBackground(PlayerUi.surface(this,Color.BLACK,18));videoFrame.setClipToOutline(true);root.addView(videoFrame);
-        video=new VideoView(this);video.setId(1000);video.setContentDescription("视频画面，点击显示或隐藏全屏控制");FrameLayout.LayoutParams vp=new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER);videoFrame.addView(video,vp);video.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        video=new MatureVideoView(this);video.setId(1000);video.setContentDescription("视频画面，点击显示或隐藏全屏控制");FrameLayout.LayoutParams vp=new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER);videoFrame.addView(video,vp);video.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         loading=new ProgressBar(this);loading.setIndeterminateTintList(ColorStateList.valueOf(PlayerUi.ACCENT));videoFrame.addView(loading,new FrameLayout.LayoutParams(dp(36),dp(36),Gravity.CENTER));
         touchLayer=new View(this);touchLayer.setId(1010);touchLayer.setContentDescription("显示或隐藏播放控制");touchLayer.setFocusable(true);videoFrame.addView(touchLayer,new FrameLayout.LayoutParams(-1,-1));touchLayer.setOnClickListener(v->{if(fullscreen)setChrome(!chromeVisible);});
         buildControls();buildDetails();buildOverlayHeader();
@@ -106,12 +106,12 @@ public final class SystemPlayerActivity extends Activity {
     private void addWeighted(LinearLayout row,View view,int height){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(height),1);p.setMargins(dp(4),dp(4),dp(4),dp(4));row.addView(view,p);}
     private void buildOverlayHeader(){overlayHeader=new LinearLayout(this);overlayHeader.setGravity(Gravity.CENTER_VERTICAL);overlayHeader.setPadding(dp(12),dp(4),dp(16),dp(4));overlayHeader.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xD9000000,0x00000000}));videoFrame.addView(overlayHeader,new FrameLayout.LayoutParams(-1,dp(64),Gravity.TOP));ImageButton back=PlayerUi.icon(this,"back","退出全屏",false);back.setId(1009);overlayHeader.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));back.setOnClickListener(v->setFullscreen(false));overlayTitle=PlayerUi.text(this,"",14,PlayerUi.TEXT);overlayTitle.setSingleLine();overlayTitle.setEllipsize(TextUtils.TruncateAt.END);overlayHeader.addView(overlayTitle,new LinearLayout.LayoutParams(0,-2,1));overlayHeader.setVisibility(View.GONE);}
     private void configureMedia(){
-        video.setOnPreparedListener(mp->{media=mp;ready=true;failed=false;loading.setVisibility(View.GONE);progress.setEnabled(video.getDuration()>0);setJumpsEnabled(video.getDuration()>0);playButton.setEnabled(true);handler.removeCallbacks(tick);handler.post(tick);
+        video.setOnPreparedListener(mp->{media=(IjkExo2MediaPlayer)mp;ready=true;failed=false;loading.setVisibility(View.GONE);progress.setEnabled(video.getDuration()>0);setJumpsEnabled(video.getDuration()>0);playButton.setEnabled(true);handler.removeCallbacks(tick);handler.post(tick);
             int resume=getIntent().getIntExtra("position",0);if(resume>0&&resume<video.getDuration()-2000)seekExact(resume);
             if(foreground)video.start();updatePlay();scheduleHide();
         });
         video.setOnCompletionListener(mp->{if(looping){seekExact((int)pointA);video.start();return;}next();setChrome(true);updatePlay();});
-        video.setOnErrorListener((mp,what,extra)->{showFailure(extra);return true;});
+        video.setOnErrorListener((mp,what,extra)->{showFailure(what);return true;});
     }
     private void sizePlayer(){
         int width=root.getWidth()-root.getPaddingLeft()-root.getPaddingRight();if(width<=0)return;
@@ -154,7 +154,7 @@ public final class SystemPlayerActivity extends Activity {
     @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);root.post(this::sizePlayer);}
     @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(fullscreen){if(focused){applySystemBars();setChrome(true);}else handler.removeCallbacks(hideControls);}}
     @Override public void onBackPressed(){if(fullscreen){setFullscreen(false);return;}super.onBackPressed();}
-    private void seekExact(int value){jumpTarget=-1;try{if(media!=null)media.seekTo((long)value,MediaPlayer.SEEK_CLOSEST);else video.seekTo(value);}catch(IllegalStateException error){toast("视频尚未准备好，请稍后重试");}}
+    private void seekExact(int value){jumpTarget=-1;try{if(media!=null)media.seekTo((long)value);else video.seekTo(value);}catch(IllegalStateException error){toast("视频尚未准备好，请稍后重试");}}
     private void clearLoop(){looping=false;updatePoints();}
     private void load(Uri uri,boolean initial){
         current=uri;ready=false;failed=false;media=null;jumpTarget=-1;setJumpsEnabled(false);pointA=pointB=0;clearLoop();title.setText(displayName(uri));title.setContentDescription(displayName(uri));overlayTitle.setText(displayName(uri));position.setText("连接中…");loading.setVisibility(View.VISIBLE);playButton.setEnabled(false);progress.setEnabled(false);progress.setProgress(0);speedButton.setText("1.0×");
@@ -163,7 +163,7 @@ public final class SystemPlayerActivity extends Activity {
             String cookie=getIntent().getStringExtra("cookie");if(cookie!=null)headers.put("Cookie",cookie);
         }
         if("https".equals(uri.getScheme())){String cookie=CookieManager.getInstance().getCookie(uri.toString());if(cookie!=null)headers.put("Cookie",cookie);String agent=getIntent().getStringExtra("userAgent");if(agent!=null)headers.put("User-Agent",agent);}
-        try{video.setVideoURI(uri,PlaybackHeaders.sanitize(headers));}catch(RuntimeException error){showFailure(-1004);}
+        try{video.setSourceMime(initial?getIntent().getStringExtra("mime"):null);video.setVideoURI(uri,PlaybackHeaders.sanitize(headers));}catch(RuntimeException error){showFailure(-1004);}
         handler.postDelayed(()->{if(current==uri&&!ready&&!failed)showFailure(-110);},40000);
     }
     private String displayName(Uri uri){
@@ -185,11 +185,11 @@ public final class SystemPlayerActivity extends Activity {
         if(getIntent().getBooleanExtra("autoNext",true)&&queue!=null){int index=queue.indexOf(current.toString());if(index>=0&&index+1<queue.size()){getIntent().putExtra("position",0);load(Uri.parse(queue.get(index+1)),false);return;}}
         updatePlay();
     }
-    private void chooseSpeed(){if(!ready||media==null)return;String[] labels={"0.5 倍速","0.75 倍速","1.0 倍速","1.25 倍速","1.5 倍速","2.0 倍速","3.0 倍速"};float[] values={.5f,.75f,1f,1.25f,1.5f,2f,3f};new AlertDialog.Builder(this).setTitle("播放速度").setItems(labels,(d,i)->{try{boolean wasPlaying=video.isPlaying();media.setPlaybackParams(media.getPlaybackParams().setSpeed(values[i]));if(!wasPlaying)video.pause();speedButton.setText(values[i]+"×");setChrome(true);}catch(RuntimeException e){toast("此格式不支持所选速度");}}).show();}
+    private void chooseSpeed(){if(!ready||media==null)return;String[] labels={"0.5 倍速","0.75 倍速","1.0 倍速","1.25 倍速","1.5 倍速","2.0 倍速","3.0 倍速"};float[] values={.5f,.75f,1f,1.25f,1.5f,2f,3f};new AlertDialog.Builder(this).setTitle("播放速度").setItems(labels,(d,i)->{try{boolean wasPlaying=video.isPlaying();media.setSpeed(values[i],1f);if(!wasPlaying)video.pause();speedButton.setText(values[i]+"×");setChrome(true);}catch(RuntimeException e){toast("此格式不支持所选速度");}}).show();}
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);if(request!=44||result!=RESULT_OK||data==null||data.getData()==null||!ready)return;
         try{Uri uri=data.getData();String name=displayName(uri).toLowerCase(Locale.ROOT);String mime=name.endsWith(".vtt")?"text/vtt":"application/x-subrip";
-            video.addSubtitleSource(getContentResolver().openInputStream(uri),MediaFormat.createSubtitleFormat(mime,"zh"));toast("已导入字幕，按系统字幕显示设置呈现");
+            video.addSubtitle(uri,mime);toast("已导入字幕，在画面下方显示");
         }catch(Exception error){toast("字幕导入失败，请选择 UTF-8 的 SRT 或 VTT 文件");}
     }
     private Intent resultData(){return new Intent().putExtra("url",current==null?"":current.toString()).putExtra("position",video==null?0:video.getCurrentPosition());}

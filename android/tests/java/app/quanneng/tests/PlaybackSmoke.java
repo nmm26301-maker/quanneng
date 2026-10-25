@@ -3,7 +3,6 @@ import android.app.*;
 import android.content.*;
 import android.net.Uri;
 import android.os.*;
-import android.widget.VideoView;
 import android.view.*;
 import android.graphics.Bitmap;
 import java.io.ByteArrayOutputStream;
@@ -16,6 +15,8 @@ public final class PlaybackSmoke extends Instrumentation {
     @Override public void onStart(){
         Bundle result=new Bundle();
         try{
+            Activity hls=open(Intent.ACTION_SEND,Uri.parse("https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"));awaitPlayable(hls);report("GSY + Media3 HLS video decoded and position advanced");runOnMainSync(hls::finish);SystemClock.sleep(300);
+            Activity dash=open(Intent.ACTION_SEND,Uri.parse("https://storage.googleapis.com/shaka-demo-assets/angel-one/dash.mpd"));awaitPlayable(dash);report("GSY + Media3 DASH video decoded and position advanced");runOnMainSync(dash::finish);SystemClock.sleep(300);
             Activity network=open(Intent.ACTION_SEND,Uri.parse("https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"));
             awaitPlayable(network);report("HTTPS video decoded and position advanced");
             exerciseLoop(network);report("Native AB interval repeated successfully");
@@ -33,25 +34,25 @@ public final class PlaybackSmoke extends Instrumentation {
         runOnMainSync(()->getTargetContext().startActivity(intent));Activity player=waitForMonitorWithTimeout(monitor,45000);removeMonitor(monitor);
         if(player==null)throw new AssertionError("Main app did not route media into native player");return player;
     }
-    private long[] state(Activity activity){AtomicReference<long[]> result=new AtomicReference<>();runOnMainSync(()->{VideoView video=activity.findViewById(1000);try{android.media.MediaPlayer mp=(android.media.MediaPlayer)field(activity,"media");result.set(new long[]{video.getDuration(),video.getCurrentPosition(),mp==null?0:mp.getVideoWidth(),mp==null?0:mp.getVideoHeight()});}catch(Exception error){result.set(new long[]{0,0,0,0});}});return result.get();}
+    private long[] state(Activity activity){AtomicReference<long[]> result=new AtomicReference<>();runOnMainSync(()->{PlaybackView video=new PlaybackView(activity.findViewById(1000));try{Object mp=field(activity,"media");result.set(new long[]{video.getDuration(),video.getCurrentPosition(),mp==null?0:((Number)mp.getClass().getMethod("getVideoWidth").invoke(mp)).longValue(),mp==null?0:((Number)mp.getClass().getMethod("getVideoHeight").invoke(mp)).longValue()});}catch(Exception error){result.set(new long[]{0,0,0,0});}});return result.get();}
     private void awaitPlayable(Activity activity)throws Exception{
         long deadline=SystemClock.elapsedRealtime()+45000;
         while(SystemClock.elapsedRealtime()<deadline){long[] s=state(activity);if(s[0]>1000&&s[1]>150&&s[2]>0&&s[3]>0)return;SystemClock.sleep(150);}
         throw new AssertionError("Video never produced dimensions and advancing playback: "+java.util.Arrays.toString(state(activity)));
     }
     private void exerciseLoop(Activity activity)throws Exception{
-        runOnMainSync(()->{VideoView v=activity.findViewById(1000);v.seekTo(300);v.start();});SystemClock.sleep(450);
+        runOnMainSync(()->{PlaybackView v=new PlaybackView(activity.findViewById(1000));v.seekTo(300);v.start();});SystemClock.sleep(450);
         runOnMainSync(()->activity.findViewById(1001).performClick());SystemClock.sleep(1100);
         runOnMainSync(()->activity.findViewById(1002).performClick());runOnMainSync(()->activity.findViewById(1003).performClick());SystemClock.sleep(2500);
         AtomicReference<Boolean> good=new AtomicReference<>(false);
-        runOnMainSync(()->{try{long a=(Long)field(activity,"pointA"),b=(Long)field(activity,"pointB");boolean enabled=(Boolean)field(activity,"looping");VideoView v=activity.findViewById(1000);int p=v.getCurrentPosition();good.set(enabled&&b>a&&v.isPlaying()&&p>=a-250&&p<=b+350);}catch(Exception error){throw new RuntimeException(error);}});
+        runOnMainSync(()->{try{long a=(Long)field(activity,"pointA"),b=(Long)field(activity,"pointB");boolean enabled=(Boolean)field(activity,"looping");PlaybackView v=new PlaybackView(activity.findViewById(1000));int p=v.getCurrentPosition();good.set(enabled&&b>a&&v.isPlaying()&&p>=a-250&&p<=b+350);}catch(Exception error){throw new RuntimeException(error);}});
         if(!good.get())throw new AssertionError("AB loop did not keep playback inside selected range");
     }
     private void exerciseFullscreen(Activity activity)throws Exception{
         runOnMainSync(()->activity.findViewById(1004).performClick());SystemClock.sleep(250);
         long paused=state(activity)[1];SystemClock.sleep(300);if(Math.abs(state(activity)[1]-paused)>100)throw new AssertionError("Pause button did not pause");
         snapshot("PORTRAIT");runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,true);
-        AtomicReference<Boolean> pausedStill=new AtomicReference<>(false);runOnMainSync(()->{VideoView v=activity.findViewById(1000);pausedStill.set(!v.isPlaying());});
+        AtomicReference<Boolean> pausedStill=new AtomicReference<>(false);runOnMainSync(()->{PlaybackView v=new PlaybackView(activity.findViewById(1000));pausedStill.set(!v.isPlaying());});
         if(!pausedStill.get()||Math.abs(state(activity)[1]-paused)>500)throw new AssertionError("Fullscreen lost paused playback position");
         SystemClock.sleep(1200);waitForIdleSync();snapshot("LANDSCAPE");report("Fullscreen layout and pause position preserved");runOnMainSync(()->activity.findViewById(1004).performClick());SystemClock.sleep(4500);
         AtomicReference<Boolean> hidden=new AtomicReference<>(false);runOnMainSync(()->hidden.set(activity.findViewById(1006).getVisibility()==View.GONE));if(!hidden.get())throw new AssertionError("Fullscreen controls did not auto-hide");
@@ -72,10 +73,10 @@ public final class PlaybackSmoke extends Instrumentation {
         setPosition(activity,1250000);tapControl(activity,1205);awaitPosition(activity,1300000);
         runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,false);
     }
-    private void setPosition(Activity activity,int position)throws Exception{runOnMainSync(()->{VideoView v=activity.findViewById(1000);v.pause();v.seekTo(position);});awaitPosition(activity,position);SystemClock.sleep(500);}
+    private void setPosition(Activity activity,int position)throws Exception{runOnMainSync(()->{PlaybackView v=new PlaybackView(activity.findViewById(1000));v.pause();v.seekTo(position);});awaitPosition(activity,position);SystemClock.sleep(500);}
     private void awaitPosition(Activity activity,int target)throws Exception{
         long deadline=SystemClock.elapsedRealtime()+8000;
-        while(SystemClock.elapsedRealtime()<deadline){AtomicReference<Boolean> good=new AtomicReference<>(false);runOnMainSync(()->{VideoView v=activity.findViewById(1000);good.set(!v.isPlaying()&&Math.abs(v.getCurrentPosition()-target)<=1200);});if(good.get())return;SystemClock.sleep(100);}
+        while(SystemClock.elapsedRealtime()<deadline){AtomicReference<Boolean> good=new AtomicReference<>(false);runOnMainSync(()->{PlaybackView v=new PlaybackView(activity.findViewById(1000));good.set(!v.isPlaying()&&Math.abs(v.getCurrentPosition()-target)<=1200);});if(good.get())return;SystemClock.sleep(100);}
         throw new AssertionError("Paused seek did not reach "+target+": "+java.util.Arrays.toString(state(activity)));
     }
     private void tapVideo(Activity activity)throws Exception{tapControl(activity,1010);}
@@ -94,6 +95,17 @@ public final class PlaybackSmoke extends Instrumentation {
     private void snapshot(String label)throws Exception{
         Bitmap original=getUiAutomation().takeScreenshot();if(original==null)throw new AssertionError("Cannot capture player UI");
         int width=Math.min(600,original.getWidth());Bitmap scaled=Bitmap.createScaledBitmap(original,width,original.getHeight()*width/original.getWidth(),true);ByteArrayOutputStream bytes=new ByteArrayOutputStream();scaled.compress(Bitmap.CompressFormat.JPEG,85,bytes);report("QUANNENG_UI_"+label+":"+android.util.Base64.encodeToString(bytes.toByteArray(),android.util.Base64.NO_WRAP));if(scaled!=original)scaled.recycle();original.recycle();
+    }
+    private static final class PlaybackView {
+        private final View view;
+        PlaybackView(View value){view=value;}
+        Object call(String method,Class<?>[] types,Object... args){try{return view.getClass().getMethod(method,types).invoke(view,args);}catch(Exception e){throw new RuntimeException(e);}}
+        int getDuration(){return ((Number)call("getDuration",new Class<?>[0])).intValue();}
+        int getCurrentPosition(){return ((Number)call("getCurrentPosition",new Class<?>[0])).intValue();}
+        boolean isPlaying(){return (Boolean)call("isPlaying",new Class<?>[0]);}
+        void start(){call("start",new Class<?>[0]);}
+        void pause(){call("pause",new Class<?>[0]);}
+        void seekTo(int position){call("seekTo",new Class<?>[]{int.class},position);}
     }
     private Object field(Activity activity,String name)throws Exception{Field f=activity.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(activity);}
     private void report(String text){Bundle data=new Bundle();data.putString("stream",text+"\n");sendStatus(0,data);}

@@ -50,3 +50,14 @@ python3 android/tools/build.py --sdk /path/to/sdk-unpacked --keystore /private/q
 竖屏六档跳转改为带方向图标、分层数字和描边的时间块。横屏全屏直接显示 −10分、−1分、−10秒、+10秒、+1分、+10分，所有触摸目标不少于48dp。按压缩放90ms、回弹160ms，叠加原生涟漪；跳转后视频区域显示方向和目标时间。连续点击会累加目标，接近起止边界时明确反馈；暂停跳转不自动播放。按系统动画关闭设置自动省略位移动效。
 
 新增1300秒合成测试媒体，验证六档实际跳转、起止截断、连续点击、暂停保持与全屏按钮边界；不会将测试视频放入正式APK。
+
+## v0.2.4 changes and verification
+
+- Removed AI chat, configuration UI, Chat Completions requests and their JavaScript bridge methods.
+- Added device-local website bookmarks with naming/editing, search, deduplication, deletion confirmation and visible storage failure. Existing video queue remains separate.
+- Added feature-gated AndroidX document-start detection in cross-origin frames, fetch/XHR MIME observation, extensionless source collection and automatic count updates. A blob URL is never handed to native MediaPlayer. When the page plays without an independent source, the UI says so and retains webpage viewing.
+- Added `BrowserSmoke`: isolated HTTPS fixture origins delivered through a test-only WebViewClient, actual MP4-to-blob playback, extensionless fetch/XHR, cross-origin iframe source/referrer preservation; real offline React UI bookmark add/rename/reopen/delete and removed AI bridge assertions.
+- Fixture origins and network stubs exist only in the instrumentation APK. Tests never visit the user's page or access their session. Production does not trust test certificates or allow cleartext traffic.
+- Build tool fetches two pinned Apache-2.0 AndroidX AARs from Google Maven, checks hashes, includes resource IDs and dex classes; source app remains Java 8, minimum Android 8 / API 26.
+
+The current v0.2.4 player uses GSYVideoPlayer 14.0.0's Media3 1.10.1 backend, with Media3 HLS/DASH modules and text subtitle rendering. The earlier v0.2.x descriptions of platform VideoView/MediaPlayer are historical. `PlaybackSmoke` now asserts native dimensions/position through the adapter and first tests public Shaka HLS and DASH fixtures, then MP4, AB, full-screen, all six jumps and local content playback. The dependency lock records every included AAR/JAR and checksum; no Cast, service/session, IJK native libraries or downloaded executable is included.

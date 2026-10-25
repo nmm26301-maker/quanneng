@@ -28,6 +28,8 @@ jobs:
           mkdir -p android/build/header-tests
           javac -d android/build/header-tests android/app/src/main/java/app/quanneng/PlaybackHeaders.java android/tests/PlaybackHeadersCheck.java
           java -cp android/build/header-tests PlaybackHeadersCheck
+          javac -d android/build/header-tests android/app/src/main/java/app/quanneng/MediaCandidatePolicy.java android/tests/MediaCandidateCheck.java
+          java -cp android/build/header-tests MediaCandidateCheck
       - name: Prepare Android SDK paths
         shell: bash
         run: |
@@ -72,10 +74,13 @@ jobs:
             # Same precondition as Android CTS: test app controls after OS education.
             adb shell settings put secure immersive_mode_confirmations confirmed
             adb logcat -c
-            timeout 180s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.PlaybackSmoke | tee "$RUNNER_TEMP/playback-smoke.txt"
+            timeout 300s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.PlaybackSmoke | tee "$RUNNER_TEMP/playback-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/playback-logcat.txt"
             tail -n 180 "$RUNNER_TEMP/playback-logcat.txt"
             grep -q QUANNENG_SMOKE_OK "$RUNNER_TEMP/playback-smoke.txt"
+            timeout 120s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.BrowserSmoke | tee "$RUNNER_TEMP/browser-smoke.txt"
+            adb logcat -d -v brief > "$RUNNER_TEMP/browser-logcat.txt"
+            grep -q QUANNENG_BROWSER_OK "$RUNNER_TEMP/browser-smoke.txt"
       - name: Save Android playback test diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -84,4 +89,6 @@ jobs:
           path: |
             ${{ runner.temp }}/playback-smoke.txt
             ${{ runner.temp }}/playback-logcat.txt
+            ${{ runner.temp }}/browser-smoke.txt
+            ${{ runner.temp }}/browser-logcat.txt
           if-no-files-found: ignore

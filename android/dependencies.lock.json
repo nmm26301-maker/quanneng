@@ -1,0 +1,212 @@
+[
+  {
+    "name": "webkit",
+    "version": "1.14.0",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/webkit/webkit/1.14.0/webkit-1.14.0.aar",
+    "extension": "aar",
+    "sha256": "265604786ea1c9679e3f860f7f13072375c141f46db9092ed8ef5ecd599a516d"
+  },
+  {
+    "name": "core",
+    "version": "1.1.0",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/core/core/1.1.0/core-1.1.0.aar",
+    "extension": "aar",
+    "sha256": "76c7cfbe596fe3c09a6983bf1c89e889299c08ac9a3b52ce5182a088d056647e"
+  },
+  {
+    "name": "media3-common",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-common/1.10.1/media3-common-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "39686f54ff6baf8cbc841199afd55619533eaef2ab6cd0efc32b8a3c55dd88c3"
+  },
+  {
+    "name": "media3-exoplayer",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer/1.10.1/media3-exoplayer-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "19090f829afbbb595d67618f59c212f72b433ac01dc72b47594cf42552c8ed61"
+  },
+  {
+    "name": "media3-exoplayer-hls",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-hls/1.10.1/media3-exoplayer-hls-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "01546472ff7a73004e4251fd6dcd2ca2ab5ffe55d294e845f7084f9743ae95b4"
+  },
+  {
+    "name": "media3-exoplayer-dash",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-dash/1.10.1/media3-exoplayer-dash-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "03cc493dd75c7bf6ab920b1963688b950807e127d7f69d4dc3052765de4d6cfb"
+  },
+  {
+    "name": "media3-exoplayer-rtsp",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-rtsp/1.10.1/media3-exoplayer-rtsp-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "4aad8a12453ea47db14c778dae3d4b0d8c60d6d89938585874fce0acaa3fd839"
+  },
+  {
+    "name": "media3-exoplayer-smoothstreaming",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-smoothstreaming/1.10.1/media3-exoplayer-smoothstreaming-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "78fd704f9da836405ac7bc33cbb6df760f000a5178ba94b39c5f258818bc08cd"
+  },
+  {
+    "name": "media3-extractor",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-extractor/1.10.1/media3-extractor-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "3c823279356b64f4215a8c6cb1e6bfa60c533351a651786ad6fa69ad001ef1b1"
+  },
+  {
+    "name": "media3-datasource",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-datasource/1.10.1/media3-datasource-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "e22f9f779047ce951152c793af094593e7cbb52475a82d56fa4f869fd319e700"
+  },
+  {
+    "name": "media3-database",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-database/1.10.1/media3-database-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "520e6f814e42a7d428db187ac073b453c0fcba0f4f5f4edd1cf33fafd2cfb740"
+  },
+  {
+    "name": "media3-decoder",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-decoder/1.10.1/media3-decoder-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "a9fb2b8fa1d54b4a8d6bda98a1c655b04d59c74b3ace7e2503e9e39830f13aee"
+  },
+  {
+    "name": "media3-container",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-container/1.10.1/media3-container-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "a198b62c577fa434941282fbfa31eb66ff0ff308a6573edf0b5dd01f4e38445d"
+  },
+  {
+    "name": "media3-datasource-rtmp",
+    "version": "1.10.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-datasource-rtmp/1.10.1/media3-datasource-rtmp-1.10.1.aar",
+    "extension": "aar",
+    "sha256": "b2550e023869c36e48b6d81f26c36a219eef3926ab9cd64ea24ecb6a942c51da"
+  },
+  {
+    "name": "gsyvideoplayer-exo2",
+    "version": "14.0.0",
+    "url": "https://repo.maven.apache.org/maven2/io/github/carguo/gsyvideoplayer-exo2/14.0.0/gsyvideoplayer-exo2-14.0.0.aar",
+    "extension": "aar",
+    "sha256": "8d21220192d9fbf537daa43f989c1b1d71286ef58fb1b3e187c42cb6b2502e53"
+  },
+  {
+    "name": "gsyvideoplayer-base",
+    "version": "14.0.0",
+    "url": "https://repo.maven.apache.org/maven2/io/github/carguo/gsyvideoplayer-base/14.0.0/gsyvideoplayer-base-14.0.0.aar",
+    "extension": "aar",
+    "sha256": "3d11fc0234747ffddc3dcf0298f7465046ef983fa029950002771cc783b09bc6"
+  },
+  {
+    "name": "gsyijkjava",
+    "version": "1.0.0",
+    "url": "https://repo.maven.apache.org/maven2/io/github/carguo/gsyijkjava/1.0.0/gsyijkjava-1.0.0.aar",
+    "extension": "aar",
+    "sha256": "3da49fbab45b655797f948ce97a397db143b48bc589ac12e2df390dcea85099a"
+  },
+  {
+    "name": "annotation-jvm",
+    "version": "1.8.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/annotation/annotation-jvm/1.8.1/annotation-jvm-1.8.1.jar",
+    "extension": "jar",
+    "sha256": "9aab326d9492800991854360ac248f493ce7f7c3183519309b78ace9e240f6f6"
+  },
+  {
+    "name": "annotation-experimental",
+    "version": "1.4.1",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/annotation/annotation-experimental/1.4.1/annotation-experimental-1.4.1.aar",
+    "extension": "aar",
+    "sha256": "6bd4c7c7476f8260cd3bdbb81183583e93fc9f790c27dea7dc314181cbf87aa0"
+  },
+  {
+    "name": "exifinterface",
+    "version": "1.3.6",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/exifinterface/exifinterface/1.3.6/exifinterface-1.3.6.aar",
+    "extension": "aar",
+    "sha256": "1804105e9e05fdd8f760413bad5de498c381aa329f4f9d94c851bc891ac654c6"
+  },
+  {
+    "name": "guava",
+    "version": "33.3.1-android",
+    "url": "https://repo.maven.apache.org/maven2/com/google/guava/guava/33.3.1-android/guava-33.3.1-android.jar",
+    "extension": "jar",
+    "sha256": "2c3e41d1b380f2044d257947a3aa82dabf3ae4b978622745254aa18b6cf89ab0"
+  },
+  {
+    "name": "failureaccess",
+    "version": "1.0.2",
+    "url": "https://repo.maven.apache.org/maven2/com/google/guava/failureaccess/1.0.2/failureaccess-1.0.2.jar",
+    "extension": "jar",
+    "sha256": "8a8f81cf9b359e3f6dfa691a1e776985c061ef2f223c9b2c80753e1b458e8064"
+  },
+  {
+    "name": "listenablefuture",
+    "version": "9999.0-empty-to-avoid-conflict-with-guava",
+    "url": "https://repo.maven.apache.org/maven2/com/google/guava/listenablefuture/9999.0-empty-to-avoid-conflict-with-guava/listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar",
+    "extension": "jar",
+    "sha256": "b372a037d4230aa57fbeffdef30fd6123f9c0c2db85d0aced00c91b974f33f99"
+  },
+  {
+    "name": "jsr305",
+    "version": "3.0.2",
+    "url": "https://repo.maven.apache.org/maven2/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.jar",
+    "extension": "jar",
+    "sha256": "766ad2a0783f2687962c8ad74ceecc38a28b9f72a2d085ee438b7813e928d0c7"
+  },
+  {
+    "name": "checker-qual",
+    "version": "3.43.0",
+    "url": "https://repo.maven.apache.org/maven2/org/checkerframework/checker-qual/3.43.0/checker-qual-3.43.0.jar",
+    "extension": "jar",
+    "sha256": "3fbc2e98f05854c3df16df9abaa955b91b15b3ecac33623208ed6424640ef0f6"
+  },
+  {
+    "name": "error_prone_annotations",
+    "version": "2.28.0",
+    "url": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.28.0/error_prone_annotations-2.28.0.jar",
+    "extension": "jar",
+    "sha256": "f3fc8a3a0a4020706a373b00e7f57c2512dd26d1f83d28c7d38768f8682b231e"
+  },
+  {
+    "name": "j2objc-annotations",
+    "version": "3.0.0",
+    "url": "https://repo.maven.apache.org/maven2/com/google/j2objc/j2objc-annotations/3.0.0/j2objc-annotations-3.0.0.jar",
+    "extension": "jar",
+    "sha256": "88241573467ddca44ffd4d74aa04c2bbfd11bf7c17e0c342c94c9de7a70a7c64"
+  },
+  {
+    "name": "kotlin-stdlib",
+    "version": "2.0.20",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.0.20/kotlin-stdlib-2.0.20.jar",
+    "extension": "jar",
+    "sha256": "fb169596659a518357c4b2c16f43dc75ab1c4980565ed4b4a317a050e5e39006"
+  },
+  {
+    "name": "annotations",
+    "version": "13.0",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/annotations/13.0/annotations-13.0.jar",
+    "extension": "jar",
+    "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+  },
+  {
+    "name": "jspecify",
+    "version": "1.0.0",
+    "url": "https://repo.maven.apache.org/maven2/org/jspecify/jspecify/1.0.0/jspecify-1.0.0.jar",
+    "extension": "jar",
+    "sha256": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab"
+  }
+]

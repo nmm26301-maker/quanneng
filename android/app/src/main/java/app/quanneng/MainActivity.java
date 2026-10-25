@@ -13,11 +13,10 @@ import android.widget.*;
 import org.json.*;
 import java.io.*;
 import java.net.*;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 
-/** 全能主界面：可信离线前端、文件选择、全屏及 AI 接口桥接。 */
+/** 全能主界面：可信离线前端、文件选择及全屏桥接。 */
 public final class MainActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net/assets/";
     private static final int PICK_FILE = 41;
@@ -30,8 +29,6 @@ public final class MainActivity extends Activity {
     private WebChromeClient.CustomViewCallback fullCallback;
     private ValueCallback<Uri[]> picker;
     private final ExecutorService worker = Executors.newFixedThreadPool(2);
-    private final ConcurrentMap<String, HttpURLConnection> connections = new ConcurrentHashMap<>();
-    private final Set<String> cancelled = ConcurrentHashMap.newKeySet();
     private String pendingUrl;
     private boolean pipRequested = false;
     private boolean foreground = false;
@@ -189,7 +186,6 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onDestroy() {
         if (picker != null) picker.onReceiveValue(null);
-        for (HttpURLConnection connection:connections.values()) connection.disconnect();
         worker.shutdownNow();
         web.removeJavascriptInterface("Quanneng"); web.destroy(); super.onDestroy();
     }
@@ -201,19 +197,12 @@ public final class MainActivity extends Activity {
         @JavascriptInterface public void playMedia(String raw) {runOnUiThread(()->{if(!trusted()||raw==null||raw.length()>100000)return;try{launchMedia(new JSONObject(raw));}catch(Exception error){toast("视频地址无效，请重新打开原网页");}});}
         @JavascriptInterface public void openLocalVideo() {runOnUiThread(()->{if(!trusted())return;try{Intent select=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("video/*").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);startActivityForResult(select,PICK_NATIVE_VIDEO);}catch(ActivityNotFoundException error){toast("系统未找到文件选择器");}});}
 
-        @JavascriptInterface public void requestAI(String value) {
-            runOnUiThread(()->{if(trusted()&&value!=null&&value.length()<300000)worker.execute(()->callAI(value));});
-        }
-        @JavascriptInterface public void cancelAI(String id) {
-            if (id == null) return;
-            cancelled.add(id); HttpURLConnection c=connections.remove(id); if(c!=null)c.disconnect();
-        }
     }
     private void launchMedia(JSONObject request) throws JSONException {
         String url=request.getString("url");if(!isHttps(url)){toast("请使用 HTTPS 视频地址");return;}
         JSONObject context=mediaContexts.get(url);
         Intent intent=new Intent(this,SystemPlayerActivity.class).setData(Uri.parse(url));
-        if(context!=null){intent.putExtra("headers",context.optJSONObject("headers")==null?"{}":context.optJSONObject("headers").toString());intent.putExtra("sourcePage",context.optString("page",""));}
+        if(context!=null){intent.putExtra("headers",context.optJSONObject("headers")==null?"{}":context.optJSONObject("headers").toString());intent.putExtra("sourcePage",context.optString("page",""));intent.putExtra("mime",context.optString("mime",""));}
         String cookie=android.webkit.CookieManager.getInstance().getCookie(url);
         if(cookie!=null)intent.putExtra("cookie",cookie);
         intent.putExtra("userAgent",web.getSettings().getUserAgentString());
@@ -222,7 +211,7 @@ public final class MainActivity extends Activity {
         JSONArray values=request.optJSONArray("queue");ArrayList<String> queue=new ArrayList<>();
         if(values!=null){for(int i=0;i<Math.min(100,values.length());i++){String u=values.optString(i,"");if(isHttps(u))queue.add(u);}}
         intent.putStringArrayListExtra("queue",queue);
-        boolean known=context!=null||java.util.regex.Pattern.compile("(?i)\\.(mp4|m3u8|webm|m4v|mov)(?:[?#]|$)").matcher(url).find();
+        boolean known=context!=null||java.util.regex.Pattern.compile("(?i)\\.(mp4|m3u8|mpd|webm|m4v|mov|mkv)(?:[?#]|$)").matcher(url).find();
         if(known){startActivityForResult(intent,NATIVE_PLAYER);return;}
         final long token=++mediaRequest;
         final String requestAgent=web.getSettings().getUserAgentString();
@@ -234,43 +223,5 @@ public final class MainActivity extends Activity {
             final boolean webpage=html;
             runOnUiThread(()->{if(isFinishing()||!foreground||token!=mediaRequest)return;if(webpage){toast("这是网页地址，请在网页内开始播放后点击发现视频");openBrowser(url);}else startActivityForResult(intent,NATIVE_PLAYER);});
         });
-    }
-    private void callAI(String raw) {
-        String id = ""; HttpURLConnection connection=null;
-        try {
-            JSONObject request = new JSONObject(raw); id = request.getString("id");
-            String endpoint = request.getString("endpoint");
-            if (!isHttps(endpoint)) throw new IOException("接口必须使用 HTTPS");
-            if (cancelled.contains(id)) return;
-            String address = endpoint.replaceAll("/$", "") + "/chat/completions";
-            connection=(HttpURLConnection)new URL(address).openConnection();
-            connections.put(id,connection);
-            connection.setInstanceFollowRedirects(false); connection.setConnectTimeout(20000); connection.setReadTimeout(60000);
-            connection.setRequestMethod("POST"); connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type","application/json");
-            connection.setRequestProperty("Authorization","Bearer "+request.getString("key"));
-            JSONObject body=new JSONObject(); body.put("model",request.getString("model"));body.put("messages",request.getJSONArray("messages"));body.put("stream",false);
-            try(OutputStream output=connection.getOutputStream()){output.write(body.toString().getBytes(StandardCharsets.UTF_8));}
-            int code=connection.getResponseCode();
-            if(code<200||code>=300)throw new IOException("接口请求失败（"+code+"），请检查地址、模型、密钥与额度");
-            ByteArrayOutputStream bytes=new ByteArrayOutputStream();
-            try(InputStream input=connection.getInputStream()){
-                byte[] buffer=new byte[8192];int count;
-                while((count=input.read(buffer))!=-1){if(bytes.size()+count>2*1024*1024)throw new IOException("返回内容过大");bytes.write(buffer,0,count);}
-            }
-            JSONObject response=new JSONObject(bytes.toString("UTF-8"));
-            String text=response.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content");
-            deliverAI(id,text,null);
-        } catch(Exception error) { deliverAI(id,null,error instanceof SocketTimeoutException?"请求超时，请重试":error.getMessage()==null?"请求失败，请检查接口配置":error.getMessage()); }
-        finally {if(connection!=null)connection.disconnect();connections.remove(id);cancelled.remove(id);}
-    }
-    private void deliverAI(String id,String text,String error) {
-        if(cancelled.contains(id)||id.isEmpty())return;
-        try {
-            JSONObject result=new JSONObject();result.put("id",id);
-            if(error!=null)result.put("error",error);else result.put("content",text);
-            String js="window.dispatchEvent(new CustomEvent('quanneng-ai',{detail:"+result.toString()+"}))";
-            runOnUiThread(()->{if(!isFinishing()&&trusted())web.evaluateJavascript(js,null);});
-        } catch(JSONException ignored) { toast("AI 返回内容解析失败"); }
     }
 }

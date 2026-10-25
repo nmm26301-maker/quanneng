@@ -26,3 +26,24 @@
 官方资料：https://developer.android.com/develop/ui/views/layout/immersive ；项目：https://github.com/moneytoo/Player 。
 
 Android CTS（Apache-2.0）的 DisableImmersiveModeConfirmationRule 将 IMMERSIVE_MODE_CONFIRMATIONS 设为 confirmed，以免系统教学窗口干扰被测应用的输入。CI 采用相同的隔离模拟器前置条件，未在应用中写入这一设置。参考：https://android.googlesource.com/platform/cts/+/0c55e5e18e604b0b890dc73e2d63a0cd6f2b1159/tests/inputmethod/util/src/android/view/inputmethod/cts/util/DisableImmersiveModeConfirmationRule.java 。
+
+## v0.2.4 — frame and dynamic media observation
+
+Reviewed 2026-10-25 before implementation:
+
+| Project | License / maintenance | Approach and dependencies | Decision / known limits |
+| --- | --- | --- | --- |
+| [nktnet1/webview-kiosk](https://github.com/nktnet1/webview-kiosk) | AGPL-3.0; GitHub pushed_at 2026-10-24 | Full Android WebView browser shell and configurable page injection | Considered integration patterns only; no source copied or dependency added. A whole kiosk browser adds unrelated device controls and does not guarantee transferable video URLs. |
+| [AndroidX WebKit](https://android.googlesource.com/platform/frameworks/support/+/androidx-main/webkit/) | Apache-2.0; actively maintained AndroidX | `addDocumentStartJavaScript` injects before page JS in matching frames; `addWebMessageListener` returns frame-origin and a reply proxy. Pinned 1.14.0 + Core 1.1.0, Google Maven AARs with SHA-256 checks. | Chosen official APIs. Requires feature checks on installed WebView; older providers retain direct/same-origin detection. No third-party application source copied. |
+
+Primary references: [official WebViewCompat API](https://developer.android.com/reference/androidx/webkit/WebViewCompat), [WebKit releases](https://developer.android.com/jetpack/androidx/releases/webkit), [WebKit 1.14.0 POM and Apache license declaration](https://dl.google.com/dl/android/maven2/androidx/webkit/webkit/1.14.0/webkit-1.14.0.pom).
+
+Original bounded script observes direct video sources, performance resource URLs and successful fetch/XHR media MIME types. It does not consume response bodies, rewrite responses, intercept DRM keys, or export blob/segment URLs as playable sources. The listener accepts untrusted candidate data only, validates HTTPS and frame origin, caps lengths/counts, and never starts activities, reads files, or returns credentials to pages. Network headers remain sanitized, bounded and in memory. DRM, WebRTC, opaque responses and private segmented protocols are not universally extractable; native MediaPlayer codec/stream limits still apply.
+
+### Added playback engine and mrowser design reference
+
+- **GSYVideoPlayer 14.0.0**, Apache-2.0, upstream GitHub pushed 2026-10-10. Maven Central's stable release metadata is authoritative (13.3.0 appeared in README but was not published). The actual `gsyvideoplayer-exo2` / `gsyvideoplayer-base` artifacts use **Media3 1.10.1**, plus Apache-2.0 GSYIjkJava 1.0.0. `MatureVideoView` is a thin original UI adapter around the unmodified published `IjkExo2MediaPlayer`; the app no longer uses platform VideoView for playback. It retains GSY source construction, load control, renderer selection and Media3 decoding. Protocol modules include HLS, DASH, progressive, RTSP and SmoothStreaming; UI only accepts HTTPS and content URIs. Cast/session/UI modules and native RTMP/IJK codecs are intentionally excluded from the reviewed dependency subset. The app does not advertise those excluded features.
+- **m-salehi-v/mrowser**, MIT, upstream GitHub pushed 2026-10-22. Reviewed `MediaUrlClassifier`, `StreamSniffer`, `StreamCandidateSelector` and `SniffingWebViewClient`: classify manifest/file/subtitle/segment separately, prefer HLS master/HLS/DASH over preview files, preserve request context and reset candidates per navigation. Implemented independent Java policy and generation checks; no Kotlin app code or GPL block lists copied. MIME observation and cross-frame script are original additions, preserving extensionless manifests through to GSY's override-extension option.
+- Media3 alone supplies a mature playback API but would require rebuilding orchestration; GSY's existing Media3 backend fits the custom full-screen controls without embedding a second UI framework. Neither guarantees extraction of DRM/private web protocols. GSY upstream notes fullscreen pause and source/header issues in past versions, so Android tests retain paused seek, orientation, AB and content URI coverage and add real HLS/DASH playback.
+
+Sources: [published GSY Exo POM](https://repo.maven.apache.org/maven2/io/github/carguo/gsyvideoplayer-exo2/14.0.0/gsyvideoplayer-exo2-14.0.0.pom), [GSY update history](https://github.com/CarGuo/GSYVideoPlayer/blob/master/doc/UPDATE_VERSION_EN.md), [mrowser source and license](https://github.com/m-salehi-v/mrowser). Exact resolved artifact hashes and coordinates are in `android/dependencies.lock.json`.
