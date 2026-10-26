@@ -1,4 +1,4 @@
-# 全能 v0.3.0
+# 全能 v0.3.1
 
 安卓视频播放器与网址收藏。新增底部「功能中心」，12 项增强的用法与边界见 [功能说明](docs/FEATURES.md)。React 19 + Tailwind CSS 4 离线界面，使用 GSYVideoPlayer 14.0.0 + Media3 1.10.1 播放内核。
 

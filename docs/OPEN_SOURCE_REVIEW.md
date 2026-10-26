@@ -78,3 +78,8 @@ Private access follows platform [Android Keystore](https://developer.android.com
 - https://github.com/jupnp/jupnp
 - https://github.com/androidx/media/issues/1976
 - https://developer.android.com/privacy-and-security/cryptography
+
+
+## v0.3.1：本地视频临时投屏与接力
+
+比较 NanoHttpd/nanohttpd（BSD-3-Clause，仓库最近推送 2023-07）与 yanzhenjie/AndServer（Apache-2.0，最近推送 2023-06）。两者均非近期活跃发布，未把它们描述为持续活跃维护。选择固定 NanoHTTPD 2.3.1 的小型核心作为 HTTP 解析和连接层，避免引入 Web 框架及注解构建链；SHA-256 与 Maven 坐标已固定，完整 BSD 许可证随包附带。应用未启用其目录、上传或文件服务器扩展，只发布一个已选择的视频副本；自己的封装限制私网来源、随机会话路径、方法、单一 Range、30 分钟时限和 4 个工作连接/4 个排队连接。测试覆盖端点边界、后台生命周期、访问撤销及真实 Media3 读取。

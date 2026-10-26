@@ -41,6 +41,11 @@ jobs:
           unzip -q "$RUNNER_TEMP/build-tools.zip" -d "$RUNNER_TEMP/quanneng-sdk"
           unzip -q "$RUNNER_TEMP/platform.zip" -d "$RUNNER_TEMP/quanneng-sdk"
       - run: python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-debug.apk" --abi x86_64
+      - name: Check bounded local media endpoint
+        run: |
+          mkdir -p android/build/range-tests
+          javac -encoding UTF-8 -cp "$RUNNER_TEMP/quanneng-sdk/quanneng-dependencies/nanohttpd/classes.jar" -d android/build/range-tests android/app/src/main/java/app/quanneng/NetworkPolicy.java android/app/src/main/java/app/quanneng/MediaShareServer.java android/tests/MediaRangeCheck.java
+          java -cp "android/build/range-tests:$RUNNER_TEMP/quanneng-sdk/quanneng-dependencies/nanohttpd/classes.jar" app.quanneng.MediaRangeCheck
       - uses: actions/upload-artifact@v4
         with:
           name: Quanneng-debug
@@ -80,6 +85,10 @@ jobs:
             adb logcat -d -v brief > "$RUNNER_TEMP/features-logcat.txt"
             tail -n 180 "$RUNNER_TEMP/features-logcat.txt"
             grep -q QUANNENG_FEATURES_OK "$RUNNER_TEMP/features-smoke.txt"
+            timeout 120s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.ShareSmoke | tee "$RUNNER_TEMP/share-smoke.txt"
+            adb logcat -d -v brief > "$RUNNER_TEMP/share-logcat.txt"
+            tail -n 120 "$RUNNER_TEMP/share-logcat.txt"
+            grep -q QUANNENG_SHARE_OK "$RUNNER_TEMP/share-smoke.txt"
             timeout 300s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.PlaybackSmoke | tee "$RUNNER_TEMP/playback-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/playback-logcat.txt"
             tail -n 180 "$RUNNER_TEMP/playback-logcat.txt"
@@ -104,4 +113,6 @@ jobs:
             ${{ runner.temp }}/transfer-logcat.txt
             ${{ runner.temp }}/features-smoke.txt
             ${{ runner.temp }}/features-logcat.txt
+            ${{ runner.temp }}/share-smoke.txt
+            ${{ runner.temp }}/share-logcat.txt
           if-no-files-found: ignore

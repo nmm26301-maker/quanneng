@@ -1,0 +1,53 @@
+package app.quanneng.tests;
+
+import android.app.*;
+import android.content.*;
+import android.net.Uri;
+import android.os.*;
+import android.widget.*;
+import java.io.*;
+import java.lang.reflect.*;
+import java.net.*;
+import java.util.*;
+
+/** 验证真实本地 Range/HEAD 流、后台会话、令牌拒绝、关闭撤销与工具错误反馈。 */
+public final class ShareSmoke extends Instrumentation {
+    private Context context;
+    @Override public void onCreate(Bundle b){super.onCreate(b);start();}
+    private Object call(String type,String name,Class<?>[] types,Object... args)throws Exception{Method m=Class.forName("app.quanneng."+type).getDeclaredMethod(name,types);m.setAccessible(true);return m.invoke(null,args);}
+    private void check(boolean value,String message){if(!value)throw new AssertionError(message);}
+    private String shared()throws Exception{Field f=Class.forName("app.quanneng.LanShareService").getDeclaredField("url");f.setAccessible(true);return (String)f.get(null);}
+    private HttpURLConnection connection(String url,String method,String range)throws Exception{HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();c.setConnectTimeout(4000);c.setReadTimeout(5000);c.setRequestMethod(method);c.setRequestProperty("Connection","close");if(range!=null)c.setRequestProperty("Range",range);return c;}
+    private byte[] read(InputStream input)throws Exception{try(InputStream in=input;ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)out.write(b,0,n);return out.toByteArray();}}
+    private void report(String s){Bundle b=new Bundle();b.putString("stream","SHARE_STEP "+s+"\n");sendStatus(0,b);}
+    @Override public void onStart(){PrivateTestAccess.install(this);context=getTargetContext();Bundle result=new Bundle();try{
+        Activity root=startActivitySync(new Intent().setComponent(new ComponentName("app.quanneng","app.quanneng.MainActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));PrivateTestAccess.awaitUnlocked(this,root);
+        check(!(Boolean)call("LanShareService","allowed",new Class<?>[]{Uri.class},Uri.parse("content://app.quanneng.media/vault-open/a.mp4")),"Vault can be shared");
+        Uri source=Uri.parse("content://app.quanneng.tests.fixture/seek-fixture.mp4");byte[] original=read(context.getContentResolver().openInputStream(source));
+        java.util.concurrent.atomic.AtomicReference<Boolean> started=new java.util.concurrent.atomic.AtomicReference<>();runOnMainSync(()->{try{started.set((Boolean)call("LanShareService","request",new Class<?>[]{Context.class,Uri.class},context,source));}catch(Exception e){throw new RuntimeException(e);}});check(Boolean.TRUE.equals(started.get()),"Sharing did not start");long limit=SystemClock.elapsedRealtime()+20000;while(shared().isEmpty()&&SystemClock.elapsedRealtime()<limit)SystemClock.sleep(100);String url=shared();check(!url.isEmpty(),"Sharing not ready");report("ready");
+        HttpURLConnection full=connection(url,"GET",null);try{check(full.getResponseCode()==200,"GET status");check(Arrays.equals(original,read(full.getInputStream())),"Shared bytes differ");}finally{full.disconnect();}
+        HttpURLConnection partial=connection(url,"GET","bytes=7-20");try{check(partial.getResponseCode()==206,"Range status");check(partial.getHeaderField("Content-Range").equals("bytes 7-20/"+original.length),"Range metadata");check(Arrays.equals(Arrays.copyOfRange(original,7,21),read(partial.getInputStream())),"Range bytes");}finally{partial.disconnect();}
+        HttpURLConnection suffix=connection(url,"GET","bytes=-9");try{check(suffix.getResponseCode()==206&&Arrays.equals(Arrays.copyOfRange(original,original.length-9,original.length),read(suffix.getInputStream())),"Suffix range");}finally{suffix.disconnect();}
+        HttpURLConnection head=connection(url,"HEAD",null);try{check(head.getResponseCode()==200&&head.getContentLengthLong()==original.length,"HEAD length");check(read(head.getInputStream()).length==0,"HEAD returned body");}finally{head.disconnect();}
+        for(String range:new String[]{"bytes=999999999-","bytes=0-1,3-4","bytes=-0"}){HttpURLConnection invalid=connection(url,"GET",range);try{check(invalid.getResponseCode()==416,"Invalid Range accepted");}finally{invalid.disconnect();}}
+        HttpURLConnection denied=connection(url+"wrong","GET",null);try{check(denied.getResponseCode()==404,"Wrong token accepted");}finally{denied.disconnect();}
+        HttpURLConnection post=connection(url,"POST",null);try{check(post.getResponseCode()==405,"Upload allowed");}finally{post.disconnect();}report("http ranges and token");
+        getUiAutomation().performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME);SystemClock.sleep(500);check(!PrivateTestAccess.unlocked(),"Background UI remained unlocked");HttpURLConnection background=connection(url,"GET","bytes=0-4");try{check(background.getResponseCode()==206,"Explicit share stopped on background");}finally{background.disconnect();}report("background");
+        runOnMainSync(()->context.startActivity(new Intent().setComponent(new ComponentName("app.quanneng","app.quanneng.MainActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)));PrivateTestAccess.awaitUnlocked(this,root);
+        playHandoff(root,url);call("LanShareService","end",new Class<?>[]{Context.class},context);limit=SystemClock.elapsedRealtime()+10000;while(!shared().isEmpty()&&SystemClock.elapsedRealtime()<limit)SystemClock.sleep(100);check(shared().isEmpty(),"Stop did not revoke URL");boolean refused=false;try{HttpURLConnection stopped=connection(url,"GET",null);try{stopped.getResponseCode();}finally{stopped.disconnect();}}catch(IOException expected){refused=true;}check(refused,"Stopped session still readable");report("revoked");
+        toolsAndState(root);result.putString("stream","Local HTTP bytes, Range/HEAD, wrong token, no upload, background, stop revocation, tool snapshots, feedback and resume verified\nQUANNENG_SHARE_OK\n");runOnMainSync(root::finish);finish(Activity.RESULT_OK,result);
+    }catch(Throwable e){e.printStackTrace();Throwable why=e instanceof InvocationTargetException?((InvocationTargetException)e).getTargetException():e;result.putString("stream","QUANNENG_SHARE_FAILED: "+why+"\n");finish(Activity.RESULT_CANCELED,result);}finally{try{call("LanShareService","end",new Class<?>[]{Context.class},context);}catch(Exception ignored){}}}
+    private android.view.View button(android.view.View view,String label){if(view instanceof Button&&((Button)view).getText().toString().equals(label))return view;if(view instanceof android.view.ViewGroup){android.view.ViewGroup group=(android.view.ViewGroup)view;for(int i=0;i<group.getChildCount();i++){android.view.View found=button(group.getChildAt(i),label);if(found!=null)return found;}}return null;}
+    private void playHandoff(Activity root,String url)throws Exception{
+        String record=(String)call("Handoff","encode",new Class<?>[]{String.class,long.class},url,1000L);ActivityMonitor incoming=addMonitor("app.quanneng.HandoffActivity",null,false);
+        runOnMainSync(()->root.startActivity(new Intent().setComponent(new ComponentName("app.quanneng","app.quanneng.MainActivity")).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,record).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP)));
+        Activity receiver=waitForMonitorWithTimeout(incoming,15000);removeMonitor(incoming);check(receiver!=null,"Shared handoff did not open receiver");PrivateTestAccess.awaitUnlocked(this,receiver);ActivityMonitor playback=addMonitor("app.quanneng.SystemPlayerActivity",null,false);
+        runOnMainSync(()->{android.view.View action=button(receiver.getWindow().getDecorView(),"继续播放接力视频");check(action!=null,"Resume action missing");action.performClick();});Activity player=waitForMonitorWithTimeout(playback,15000);removeMonitor(playback);check(player!=null,"Handoff did not open native player");PrivateTestAccess.awaitUnlocked(this,player);
+        long deadline=SystemClock.elapsedRealtime()+20000;java.util.concurrent.atomic.AtomicBoolean playing=new java.util.concurrent.atomic.AtomicBoolean();while(SystemClock.elapsedRealtime()<deadline&&!playing.get()){runOnMainSync(()->{try{Object view=player.findViewById(1000);int duration=(Integer)view.getClass().getMethod("getDuration").invoke(view),position=(Integer)view.getClass().getMethod("getCurrentPosition").invoke(view);playing.set(duration>1000&&position>1100);}catch(Exception ignored){}});SystemClock.sleep(100);}check(playing.get(),"Local HTTP handoff did not decode and advance");runOnMainSync(player::finish);runOnMainSync(receiver::finish);report("actual HTTP handoff playback");
+    }
+    private void toolsAndState(Activity root)throws Exception{
+        Object request=call("ToolRequest","capture",new Class<?>[]{String.class,String.class,String.class},"trim","1.25","3.5");Method save=request.getClass().getDeclaredMethod("saved");save.setAccessible(true);Object restored=call("ToolRequest","restore",new Class<?>[]{String.class},save.invoke(request));Field start=request.getClass().getDeclaredField("start");start.setAccessible(true);check((Double)start.get(restored)==1.25,"Picker state lost");call("ToolRequest","capture",new Class<?>[]{String.class,String.class,String.class},"audio","invalid unused","invalid unused");
+        call("PlaybackHistory","save",new Class<?>[]{Context.class,String.class,int.class,int.class},context,"https://example.com/resume.mp4",12000,30000);check((Integer)call("PlaybackHistory","position",new Class<?>[]{Context.class,String.class},context,"https://example.com/resume.mp4")==12000,"Position not stored");
+        ActivityMonitor monitor=addMonitor("app.quanneng.TransferActivity",null,false);runOnMainSync(()->root.startActivity(new Intent().setComponent(new ComponentName("app.quanneng","app.quanneng.TransferActivity"))));Activity screen=waitForMonitorWithTimeout(monitor,10000);removeMonitor(monitor);check(screen!=null,"Task screen not opened");PrivateTestAccess.awaitUnlocked(this,screen);runOnMainSync(()->{((EditText)screen.findViewById(1600)).setText("invalid");screen.findViewById(1601).performClick();});SystemClock.sleep(1200);java.util.concurrent.atomic.AtomicReference<String> text=new java.util.concurrent.atomic.AtomicReference<>();runOnMainSync(()->{try{text.set(((TextView)PrivateTestAccess.field(screen,"error")).getText().toString());}catch(Exception e){throw new RuntimeException(e);}});check(text.get().contains("HTTPS"),"Refresh erased form error");runOnMainSync(screen::finish);
+    }
+}

@@ -39,6 +39,8 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private IjkExo2MediaPlayer media;
     private Uri current;
     private float selectedSpeed=1f;
+    private long savedAt,mediaEpoch;
+    private String activeSubtitle="",subtitleStamp="";
     private boolean initialSeek,restoringVault;
     private final java.util.concurrent.ExecutorService vaultIo=java.util.concurrent.Executors.newSingleThreadExecutor();
     private ArrayList<String> queue;
@@ -51,7 +53,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private final Runnable hideControls=()->{AccessibilityManager a=(AccessibilityManager)getSystemService(ACCESSIBILITY_SERVICE);if(fullscreen&&getWindow().getDecorView().hasWindowFocus()&&ready&&video.isPlaying()&&!scrubbing&&(a==null||!a.isTouchExplorationEnabled()))setChrome(false);};
     private final Runnable hideJump=()->{final int epoch=feedbackEpoch;jumpFeedback.animate().cancel();if(PlayerUi.motionEnabled())jumpFeedback.animate().alpha(0).translationY(-dp(4)).setDuration(180).withEndAction(()->{if(epoch==feedbackEpoch)jumpFeedback.setVisibility(View.GONE);}).start();else jumpFeedback.setVisibility(View.GONE);};
     private final Runnable tick=new Runnable(){public void run(){
-        if(ready){int now=video.getCurrentPosition();if(looping&&now>=pointB){seekExact((int)pointA);now=(int)pointA;}
+        if(ready){if(SystemClock.uptimeMillis()-savedAt>3000){rememberPosition();savedAt=SystemClock.uptimeMillis();}int now=video.getCurrentPosition();if(looping&&now>=pointB){seekExact((int)pointA);now=(int)pointA;}
             if(!scrubbing){position.setText(time(now));progress.setProgress(video.getDuration()>0?(int)(1000L*now/video.getDuration()):0);}
             total.setText(time(video.getDuration()));progress.setSecondaryProgress(video.getBufferPercentage()*10);updatePlay();
         }
@@ -117,7 +119,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void buildOverlayHeader(){overlayHeader=new LinearLayout(this);overlayHeader.setGravity(Gravity.CENTER_VERTICAL);overlayHeader.setPadding(dp(12),dp(4),dp(16),dp(4));overlayHeader.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xD9000000,0x00000000}));videoFrame.addView(overlayHeader,new FrameLayout.LayoutParams(-1,dp(64),Gravity.TOP));ImageButton back=PlayerUi.icon(this,"back","退出全屏",false);back.setId(1009);overlayHeader.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));back.setOnClickListener(v->setFullscreen(false));overlayTitle=PlayerUi.text(this,"",14,PlayerUi.TEXT);overlayTitle.setSingleLine();overlayTitle.setEllipsize(TextUtils.TruncateAt.END);overlayHeader.addView(overlayTitle,new LinearLayout.LayoutParams(0,-2,1));overlayHeader.setVisibility(View.GONE);}
     private void configureMedia(){
         video.setOnPreparedListener(mp->{media=(IjkExo2MediaPlayer)mp;ready=true;failed=false;loading.setVisibility(View.GONE);progress.setEnabled(video.getDuration()>0);setJumpsEnabled(video.getDuration()>0);playButton.setEnabled(true);handler.removeCallbacks(tick);handler.post(tick);
-            int resume=getIntent().getIntExtra("position",0);if(!initialSeek&&resume>0&&resume<video.getDuration()-2000)seekExact(resume);initialSeek=true;
+            int resume=getIntent().hasExtra("position")?getIntent().getIntExtra("position",0):PlaybackHistory.position(this,current.toString());if(!initialSeek&&resume>0&&resume<video.getDuration()-2000)seekExact(resume);initialSeek=true;applyRememberedSubtitle();
             if(foreground)video.start();updatePlay();scheduleHide();
         });
         video.setOnCompletionListener(mp->{if(looping){seekExact((int)pointA);video.start();return;}next();setChrome(true);updatePlay();});
@@ -172,7 +174,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void seekExact(int value){jumpTarget=-1;try{if(media!=null)media.seekTo((long)value);else video.seekTo(value);}catch(IllegalStateException error){toast("视频尚未准备好，请稍后重试");}}
     private void clearLoop(){looping=false;updatePoints();}
     private void load(Uri uri,boolean initial){
-        current=uri;initialSeek=false;selectedSpeed=1f;ready=false;failed=false;media=null;jumpTarget=-1;setJumpsEnabled(false);pointA=pointB=0;clearLoop();title.setText(displayName(uri));title.setContentDescription(displayName(uri));overlayTitle.setText(displayName(uri));position.setText("连接中…");loading.setVisibility(View.VISIBLE);playButton.setEnabled(false);progress.setEnabled(false);progress.setProgress(0);speedButton.setText("1.0×");
+        rememberPosition();++mediaEpoch;activeSubtitle=PlaybackHistory.subtitle(this,uri.toString());subtitleStamp="";current=uri;initialSeek=false;selectedSpeed=1f;ready=false;failed=false;media=null;jumpTarget=-1;setJumpsEnabled(false);pointA=pointB=0;clearLoop();title.setText(displayName(uri));title.setContentDescription(displayName(uri));overlayTitle.setText(displayName(uri));position.setText("连接中…");loading.setVisibility(View.VISIBLE);playButton.setEnabled(false);progress.setEnabled(false);progress.setProgress(0);speedButton.setText("1.0×");
         HashMap<String,String> headers=new HashMap<>();
         if(initial){try{JSONObject data=new JSONObject(getIntent().getStringExtra("headers")==null?"{}":getIntent().getStringExtra("headers"));Iterator<String> keys=data.keys();while(keys.hasNext()){String k=keys.next();headers.put(k,data.getString(k));}}catch(JSONException ignored){}
             String cookie=getIntent().getStringExtra("cookie");if(cookie!=null)headers.put("Cookie",cookie);
@@ -189,6 +191,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void showFailure(int code){
         if(failed||isFinishing())return;failed=true;ready=false;setJumpsEnabled(false);loading.setVisibility(View.GONE);playButton.setEnabled(false);progress.setEnabled(false);setChrome(true);video.stopPlayback();
         String reason=code==-1010?"设备不支持此视频编码。":code==-1007?"视频数据格式不正确或文件损坏。":code==-110?"加载超时，请检查网络和链接是否过期。":"视频地址已失效、需要来源授权，或网络连接失败。";
+        if("http".equals(current.getScheme()))reason+=" 请确认发送端仍在共享，且两台设备连接同一 Wi-Fi。";
         position.setText(reason);
         AlertDialog.Builder dialog=new PrivateDialogBuilder(this).setTitle("视频加载失败").setMessage(reason+"\n可以重新加载，或返回原网页重新获取地址。\n诊断代码："+code)
             .setPositiveButton("重试",(d,w)->load(current,true)).setNegativeButton("返回",(d,w)->finish());
@@ -205,21 +208,28 @@ public final class SystemPlayerActivity extends PrivateActivity {
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);whenUnlocked(()->handleSubtitleResult(request,result,data));
     }
-    private void handleSubtitleResult(int request,int result,Intent data){if(request==45&&result==RESULT_OK&&data!=null){String name=data.getStringExtra("subtitle");if(name!=null){java.io.File source=new java.io.File(SubtitleStore.root(this),name);try{if(source.getCanonicalFile().getParentFile().equals(SubtitleStore.root(this).getCanonicalFile())&&source.isFile()){vaultIo.execute(()->{try{java.io.File adjusted=SubtitleStore.adjusted(this,source);runOnUiThread(()->whenUnlocked(()->{video.setSubtitleSize(getSharedPreferences("subtitle-settings",0).getInt("size",20));video.addSubtitle(Uri.fromFile(adjusted),"text/vtt");toast("字幕已应用");}));}catch(Exception e){runOnUiThread(()->toast("字幕读取失败"));}});}}catch(Exception ignored){}}return;}
+    private void handleSubtitleResult(int request,int result,Intent data){if(request==45&&result==RESULT_OK&&data!=null){String name=data.getStringExtra("subtitle");if(name!=null&&current!=null){activeSubtitle=name;subtitleStamp="";PlaybackHistory.subtitle(this,current.toString(),name);applyRememberedSubtitle();}return;}
         if(request!=44||result!=RESULT_OK||data==null||data.getData()==null||!ready)return;
         try{Uri uri=data.getData();String name=displayName(uri).toLowerCase(Locale.ROOT);String mime=name.endsWith(".vtt")?"text/vtt":"application/x-subrip";
             video.addSubtitle(uri,mime);toast("已导入字幕，在画面下方显示");
         }catch(Exception error){toast("字幕导入失败，请选择 UTF-8 的 SRT 或 VTT 文件");}
     }
+    private void rememberPosition(){if(ready&&current!=null)PlaybackHistory.save(this,current.toString(),video.getCurrentPosition(),video.getDuration());}
+    private void applyRememberedSubtitle(){
+        video.setSubtitleSize(getSharedPreferences("subtitle-settings",0).getInt("size",20));if(!ready||current==null||activeSubtitle.isEmpty())return;
+        final java.io.File source=new java.io.File(SubtitleStore.root(this),activeSubtitle);final long epoch=mediaEpoch;final String name=activeSubtitle;
+        String stamp=name+":"+source.lastModified()+":"+getSharedPreferences("subtitle-settings",0).getLong(name,0);if(stamp.equals(subtitleStamp))return;subtitleStamp=stamp;
+        vaultIo.execute(()->{try{if(!source.getCanonicalFile().getParentFile().equals(SubtitleStore.root(this).getCanonicalFile())||!source.isFile())return;java.io.File adjusted=SubtitleStore.adjusted(this,source);runOnUiThread(()->whenUnlocked(()->{if(epoch==mediaEpoch&&name.equals(activeSubtitle)&&ready)video.addSubtitle(Uri.fromFile(adjusted),"text/vtt");}));}catch(Exception e){runOnUiThread(()->{if(epoch==mediaEpoch)toast("字幕读取失败，请在字幕中心重新选择");});}});
+    }
     private Intent resultData(){return new Intent().putExtra("url",current==null?"":current.toString()).putExtra("position",video==null?0:video.getCurrentPosition());}
-    @Override public void finish(){if(current!=null)setResult(RESULT_OK,resultData());super.finish();}
+    @Override public void finish(){rememberPosition();if(current!=null)setResult(RESULT_OK,resultData());super.finish();}
     private String time(long ms){long s=Math.max(0,ms/1000);return String.format(Locale.ROOT,"%02d:%02d:%02d",s/3600,s/60%60,s%60);}
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     private boolean restoreVault(){String name=getIntent().getStringExtra("vaultFile");if(name==null)return false;java.io.File opened=current==null?null:new java.io.File(VaultStore.cache(this),current.getLastPathSegment());if(opened!=null&&opened.isFile())return false;if(restoringVault)return true;restoringVault=true;vaultIo.execute(()->{try{java.io.File encrypted=new java.io.File(VaultStore.root(this),name);if(!encrypted.getCanonicalFile().getParentFile().equals(VaultStore.root(this).getCanonicalFile()))throw new java.io.IOException();java.io.File f=VaultStore.open(this,encrypted);runOnUiThread(()->whenUnlocked(()->{restoringVault=false;load(new Uri.Builder().scheme("content").authority("app.quanneng.media").appendPath("vault-open").appendPath(f.getName()).build(),true);}));}catch(Exception error){runOnUiThread(()->{restoringVault=false;toast("保险箱视频无法解密，请重新选择");finish();});}});return true;}
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
     @Override protected void onResume(){super.onResume();foreground=privateReady();if(foreground&&ready&&resumeOnForeground){video.start();resumeOnForeground=false;}if(fullscreen)applySystemBars();}
-    @Override protected void onPause(){if(current!=null&&getIntent().hasExtra("vaultFile"))getIntent().putExtra("position",video.getCurrentPosition());foreground=false;resumeOnForeground=ready&&video.isPlaying();video.pause();handler.removeCallbacks(hideControls);super.onPause();}
-    @Override protected void onPrivateUnlocked(){foreground=true;if(restoreVault())return;if(ready&&resumeOnForeground){video.start();resumeOnForeground=false;}}
+    @Override protected void onPause(){rememberPosition();if(current!=null&&getIntent().hasExtra("vaultFile"))getIntent().putExtra("position",video.getCurrentPosition());foreground=false;resumeOnForeground=ready&&video.isPlaying();video.pause();handler.removeCallbacks(hideControls);super.onPause();}
+    @Override protected void onPrivateUnlocked(){foreground=true;if(video!=null)applyRememberedSubtitle();if(restoreVault())return;if(ready&&resumeOnForeground){video.start();resumeOnForeground=false;}}
     @Override protected void onPrivateLocked(){foreground=false;if(video!=null)video.pause();}
     @Override protected void onDestroy(){if(Build.VERSION.SDK_INT>=33&&backCallback!=null)getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);handler.removeCallbacksAndMessages(null);video.stopPlayback();vaultIo.shutdownNow();if(getIntent().hasExtra("vaultFile"))VaultStore.purge(this);super.onDestroy();}
 }

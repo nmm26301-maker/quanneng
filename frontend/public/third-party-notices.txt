@@ -315,3 +315,7 @@ https://github.com/square/okio
 Both libraries are licensed under Apache License, Version 2.0.
 License text: https://www.apache.org/licenses/LICENSE-2.0
 The complete Apache-2.0 license text is included elsewhere in this notices file.
+
+NanoHTTPD 2.3.1 — BSD-3-Clause
+https://github.com/NanoHttpd/nanohttpd
+Full license: NANOHTTPD-LICENSE.txt (bundled alongside this file).

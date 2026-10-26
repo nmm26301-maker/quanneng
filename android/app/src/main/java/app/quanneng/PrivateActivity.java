@@ -33,7 +33,7 @@ public class PrivateActivity extends Activity {
     protected void onPrivateLocked(){}
     final boolean canAcceptPassword(long epoch){return privateResumed&&!isFinishing()&&epoch==PrivateSession.generation();}
     protected final void changePrivatePassword(){if(privateReady()){changeGate=new PasswordGate(this,true,()->{});changeGate.setOnDismissListener(dialog->changeGate=null);changeGate.show();}}
-    protected final void lockPrivateApp(){PrivateSession.lock();guard();}
+    protected final void lockPrivateApp(){LanShareService.end(this);PrivateSession.lock();guard();}
     @Override public void onBackPressed(){if(!PrivateSession.isUnlocked()){finish();return;}super.onBackPressed();}
     @Override protected void onDestroy(){if(gate!=null)gate.dismiss();if(changeGate!=null)changeGate.dismiss();pending.clear();super.onDestroy();}
 }
