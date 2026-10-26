@@ -74,6 +74,8 @@ jobs:
             # Same precondition as Android CTS: test app controls after OS education.
             adb shell settings put secure immersive_mode_confirmations confirmed
             adb logcat -c
+            timeout 180s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.FeatureSmoke | tee "$RUNNER_TEMP/features-smoke.txt"
+            grep -q QUANNENG_FEATURES_OK "$RUNNER_TEMP/features-smoke.txt"
             timeout 180s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.SecuritySmoke | tee "$RUNNER_TEMP/security-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/security-logcat.txt"
             timeout 300s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.PlaybackSmoke | tee "$RUNNER_TEMP/playback-smoke.txt"
@@ -84,8 +86,6 @@ jobs:
             timeout 300s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.TransferSmoke | tee "$RUNNER_TEMP/transfer-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/transfer-logcat.txt"
             grep -q QUANNENG_SECURITY_OK "$RUNNER_TEMP/security-smoke.txt" && grep -q QUANNENG_SMOKE_OK "$RUNNER_TEMP/playback-smoke.txt" && grep -q QUANNENG_BROWSER_OK "$RUNNER_TEMP/browser-smoke.txt" && grep -q QUANNENG_TRANSFER_OK "$RUNNER_TEMP/transfer-smoke.txt"
-            timeout 180s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.FeatureSmoke | tee "$RUNNER_TEMP/features-smoke.txt"
-            grep -q QUANNENG_FEATURES_OK "$RUNNER_TEMP/features-smoke.txt"
       - name: Save Android playback test diagnostics
         if: always()
         uses: actions/upload-artifact@v4
