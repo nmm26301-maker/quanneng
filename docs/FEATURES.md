@@ -57,3 +57,15 @@
 - 修正字幕偏移极端整数及有前导零的私网地址边界。
 
 新增验证：MediaRangeCheck 主机端点测试与 ShareSmoke Android 集成测试，覆盖真实共享字节、Range/HEAD、错误令牌、禁止上传、后台、停止撤销、接收分享后原生解码、工具状态和错误反馈。实机电视/NAS 兼容性仍需验收。
+
+## v0.3.1 验证结果
+
+2026-10-26，提交 `e549a6c2381464e7ee9e5c8d893803d6a0e6ac08` 的 [GitHub Actions 40319673007](https://github.com/nmm26301-maker/quanneng/actions/runs/40319673007) 全部通过。
+
+- 前端 12 项测试、生产构建、Android 编译、MediaRangeCheck 主机测试通过。
+- Android 35 x86_64 上 SecuritySmoke、FeatureSmoke、ShareSmoke、PlaybackSmoke、BrowserSmoke、TransferSmoke 六组全部返回 OK。
+- ShareSmoke 实测选定视频的完整字节一致性、GET/HEAD/Range/后缀区间、非法区间、错误链接、禁止 POST、应用后台锁定后继续共享、从 Android 分享接收接力记录后原生 HTTP 视频解码与进度推进、停止服务后的读取拒绝、工具参数快照、原生进度保存及错误反馈不被刷新清除。
+- FeatureSmoke 继续验证真实 Keystore、密文认证、队列恢复、WebDAV 与带中文 DIDL 元数据的 DLNA SOAP、五种 FFmpeg 工具真实产物及功能页面。
+- arm64-v8a 手机安装包 `Quanneng-v0.3.1.apk` 使用原签名，SHA-256：`5cf82fefbcb4da45d2b568b538e56866aae53f20bdcab6875de38f3f539a6c03`。
+
+未验收：真实电视、真实 NAS、不同品牌手机的兼容性。WebDAV 认证仍为 Basic，原生 SMB、ASS/SSA、在线字幕搜索与跨公网自动同步不在本版实现范围内。本地共享需要同一局域网，30 分钟有效，保险箱视频不共享。
