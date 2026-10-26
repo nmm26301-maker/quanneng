@@ -98,8 +98,10 @@ public final class PlaybackSmoke extends Instrumentation {
         throw new AssertionError("Player orientation, full-width layout, or 48dp fullscreen target incorrect: "+full);
     }
     private void snapshot(String label)throws Exception{
-        Bitmap original=getUiAutomation().takeScreenshot();if(original==null)throw new AssertionError("Cannot capture player UI");
-        int width=Math.min(600,original.getWidth());Bitmap scaled=Bitmap.createScaledBitmap(original,width,original.getHeight()*width/original.getWidth(),true);ByteArrayOutputStream bytes=new ByteArrayOutputStream();scaled.compress(Bitmap.CompressFormat.JPEG,85,bytes);report("QUANNENG_UI_"+label+":"+android.util.Base64.encodeToString(bytes.toByteArray(),android.util.Base64.NO_WRAP));if(scaled!=original)scaled.recycle();original.recycle();
+        // Render only the controlled test fixture; production FLAG_SECURE remains enabled.
+        AtomicReference<Bitmap> capture=new AtomicReference<>();
+        Activity activity=PrivateTestAccess.current;runOnMainSync(()->{View view=activity.getWindow().getDecorView();Bitmap frame=Bitmap.createBitmap(view.getWidth(),view.getHeight(),Bitmap.Config.ARGB_8888);view.draw(new android.graphics.Canvas(frame));capture.set(frame);});
+        Bitmap original=capture.get();int width=Math.min(600,original.getWidth());Bitmap scaled=Bitmap.createScaledBitmap(original,width,original.getHeight()*width/original.getWidth(),true);ByteArrayOutputStream bytes=new ByteArrayOutputStream();scaled.compress(Bitmap.CompressFormat.JPEG,85,bytes);report("QUANNENG_UI_"+label+":"+android.util.Base64.encodeToString(bytes.toByteArray(),android.util.Base64.NO_WRAP));if(scaled!=original)scaled.recycle();original.recycle();
     }
     private static final class PlaybackView {
         private final View view;
