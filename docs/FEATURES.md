@@ -32,3 +32,15 @@
 为 DLNA 和常见家用 NAS 的 HTTP 控制端点启用 Android 明文网络能力。所有新增网络入口执行 `NetworkPolicy`，公网地址仍要求 HTTPS；HTTP 仅接受 10/8、172.16/12、192.168/16 数字 IP，不接受公网 HTTP、回环、链路本地、URL 内账号密码。NAS 认证媒体数据源只允许选定源，拒绝跨源和重定向。WebDAV / SOAP 请求由固定版本 OkHttp 处理，XML 禁用 DTD/外部实体并限制响应大小。
 
 加密库是应用本地文件保护功能，不宣称能在已 root、已攻破系统或运行时被注入的设备上防止窃取。原文件及用户导出的明文由用户自行管理。
+
+## v0.3.0 已完成验证记录
+
+2026-10-26，代码提交 `7725be4c3ae1cbd793efa94f45948bd1ed82a587` 对应的 [GitHub Actions 40281787561](https://github.com/nmm26301-maker/quanneng/actions/runs/40281787561) 全部通过：
+
+- 前端 12 项测试、生产构建及 Android APK 编译。
+- Android 35 x86_64 模拟器上 SecuritySmoke、FeatureSmoke、PlaybackSmoke、BrowserSmoke、TransferSmoke 五组均返回 OK。
+- FeatureSmoke 实际验证 Keystore 加解密往返、密文篡改/截断拒绝、队列落盘恢复、字幕偏移、接力记录、本机模拟 DLNA / WebDAV、五种 FFmpeg 工具真实产物与八个新页面。
+- 原有播放回归实际覆盖 HTTPS、HLS、DASH、content URI、A-B 循环、全屏控制及四个跳转按钮；下载转换回归实际执行 yt-dlp 与 FFmpeg，并验证私人 provider 锁定拒绝访问。
+- 手机 arm64-v8a 安装包 `Quanneng-v0.3.0.apk` 已构建并用原签名签名，SHA-256：`b1ab851e557a2c5f8d24c0962134e0177bf5aa014260d909b9dfdbcee4da6916`。
+
+仍未完成实机验收：具体电视品牌的 DLNA 兼容、真实 NAS 的服务器差异、SMB 文件提供器及不同手机的系统行为。模拟器协议结果不等于所有硬件均兼容。
