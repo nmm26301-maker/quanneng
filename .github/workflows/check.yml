@@ -84,6 +84,8 @@ jobs:
             timeout 300s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.TransferSmoke | tee "$RUNNER_TEMP/transfer-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/transfer-logcat.txt"
             grep -q QUANNENG_SECURITY_OK "$RUNNER_TEMP/security-smoke.txt" && grep -q QUANNENG_SMOKE_OK "$RUNNER_TEMP/playback-smoke.txt" && grep -q QUANNENG_BROWSER_OK "$RUNNER_TEMP/browser-smoke.txt" && grep -q QUANNENG_TRANSFER_OK "$RUNNER_TEMP/transfer-smoke.txt"
+            timeout 180s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.FeatureSmoke | tee "$RUNNER_TEMP/features-smoke.txt"
+            grep -q QUANNENG_FEATURES_OK "$RUNNER_TEMP/features-smoke.txt"
       - name: Save Android playback test diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -98,4 +100,5 @@ jobs:
             ${{ runner.temp }}/security-logcat.txt
             ${{ runner.temp }}/transfer-smoke.txt
             ${{ runner.temp }}/transfer-logcat.txt
+            ${{ runner.temp }}/features-smoke.txt
           if-no-files-found: ignore

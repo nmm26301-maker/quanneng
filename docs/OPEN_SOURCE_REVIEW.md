@@ -62,3 +62,19 @@ Reviewed upstream primary sources on 2026-10-25:
 Primary documentation: [wrapper usage/ABI installation](https://github.com/yausername/youtubedl-android/blob/master/README.md), [wrapper source and native build notes](https://github.com/yausername/youtubedl-android/blob/master/BUILD_FFMPEG.md), [yt-dlp supported sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md), [FFmpeg legal/build configuration](https://ffmpeg.org/legal.html). Known upstream issue: some 0.18.1 FFmpeg payload dependencies, including libwebp, have reported 16 KB-page compatibility gaps. This release targets the user's arm64 Android 13 device and tests x86_64 Android 15 on 4 KB pages; it does not claim 16 KB-device verification. QuickJS process startup can take several seconds; initialization and execution run off the UI thread.
 
 Private access follows platform [Android Keystore](https://developer.android.com/privacy-and-security/keystore), [FLAG_SECURE](https://developer.android.com/security/fraud-prevention/activities) and [foreground-service requirements](https://developer.android.com/develop/background-work/services/fgs/launch). PBKDF2-HMAC-SHA256 (210,000 rounds, 32-byte random salt) output is authenticated with an app-specific non-exportable Android Keystore HMAC key. Stored verifier comparison uses MessageDigest.isEqual. Persistent failure backoff begins after five failed attempts. UI/session checks do not expose passwords, reset links or alternate unlock methods.
+
+## v0.3.0：媒体增强（2026-10-26）
+
+- **继续使用现有 Media3 / GSY、HLS.js、yt-dlp-android / FFmpeg**：避免另换播放器和下载内核；版本及散列继续固定。
+- **WebDAV**：比较了 thegrizzlylabs/sardine-android（Apache-2.0，检索时最近代码推送为 2024-02）及其 OkHttp PROPFIND 方案。当前只需要 Depth:1 浏览、Basic 会话认证与播放，采用 OkHttp 4.12.0 + Okio 3.6.0 的小范围实现，不复制 Sardine 代码。两个版本与现有 Kotlin 2.0.20 运行时兼容，坐标和 SHA-256 已固定。关闭自动重定向，认证播放数据源限定同源，防止 NAS 凭据转发到外部站点。Digest、OAuth、WebDAV 写操作未实现。
+- **DLNA**：检索 jupnp/jupnp（UPnP/DLNA，检索时有 2026-10-25 推送；仓库许可证元数据 NOASSERTION，未直接引入）。实现范围限定于 SSDP M-SEARCH、设备 XML 描述与 AVTransport SOAP，不复制其代码，不引入完整服务端。需电视支持 MediaRenderer，暂不处理 Chromecast、Miracast 或手机文件 HTTP 服务。用模拟设备验证协议，真实电视仍需验收。
+- **字幕**：核对 androidx/media #1976，Media3 字幕偏移没有简单稳定的通用运行时设置；因此对用户导入的 SRT/VTT 改写时间轴后重新加载，并保留播放位置。不修改 Media3 内部 Renderer。
+- **保险箱**：遵循 Android Keystore 的 AES/GCM/NoPadding。大视频分块认证，AAD 绑定文件随机 ID、帧序号及帧用途，终止帧用于拒绝截断；内存有界。仅在全部认证完成后发布临时播放文件，后台/退出/启动清理。未依赖不明来源的加密实现。
+
+参考入口：
+- https://github.com/thegrizzlylabs/sardine-android
+- https://github.com/square/okhttp
+- https://github.com/square/okio
+- https://github.com/jupnp/jupnp
+- https://github.com/androidx/media/issues/1976
+- https://developer.android.com/privacy-and-security/cryptography

@@ -21,7 +21,7 @@ final class TransferRuntime {
         if(!MainActivity.isHttps(url)||url.length()>8192)throw new IllegalArgumentException("请填写完整 HTTPS 视频页面地址");
         initialize(context);token.check();folder.mkdirs();
         YoutubeDLRequest request=new YoutubeDLRequest(url);
-        request.addOption("--ignore-config");request.addOption("--no-playlist");request.addOption("--progress");request.addOption("--newline");request.addOption("--no-mtime");
+        request.addOption("--continue");request.addOption("--ignore-config");request.addOption("--no-playlist");request.addOption("--progress");request.addOption("--newline");request.addOption("--no-mtime");
         request.addOption("--socket-timeout",20);request.addOption("--retries",3);request.addOption("--fragment-retries",3);request.addOption("--concurrent-fragments",4);
         request.addOption("-f","bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b");request.addOption("--merge-output-format","mp4");
         request.addOption("-o",new File(folder,"video.%(ext)s").getAbsolutePath());
@@ -37,6 +37,18 @@ final class TransferRuntime {
         progress.update(-1,"正在转换为兼容 MP4…");
         runFFmpeg(context,Arrays.asList("-nostdin","-y","-protocol_whitelist","file,pipe","-i",input.getAbsolutePath(),"-map","0:v:0","-map","0:a:0?","-c:v","libx264","-preset","veryfast","-crf","23","-c:a","aac","-b:a","160k","-movflags","+faststart","-progress","pipe:1","-nostats",output.getAbsolutePath()),token,progress);
         if(!output.isFile()||output.length()==0)throw new IOException("未生成视频，请确认文件是可读取的普通视频");return output;
+    }
+    static File tool(Context c,File input,File folder,String mode,org.json.JSONObject o,Token token,Progress progress)throws Exception{
+        if("convert".equals(mode))return convert(c,input,folder,token,progress);
+        File out=new File(folder,"result."+("audio".equals(mode)?"m4a":"snapshot".equals(mode)?"jpg":"mp4"));List<String> a=new ArrayList<>(Arrays.asList("-nostdin","-y","-protocol_whitelist","file,pipe"));double start=o.optDouble("start",0),end=o.optDouble("end",0);
+        if(!Double.isFinite(start)||start<0||start>604800||!Double.isFinite(end)||end<0||end>604800)throw new IOException("时间超出范围");
+        if("trim".equals(mode)||"snapshot".equals(mode))a.addAll(Arrays.asList("-ss",String.valueOf(start)));a.addAll(Arrays.asList("-i",input.getAbsolutePath()));
+        if("audio".equals(mode))a.addAll(Arrays.asList("-vn","-c:a","aac","-b:a","160k"));
+        else if("snapshot".equals(mode))a.addAll(Arrays.asList("-frames:v","1","-q:v","2"));
+        else if("mute".equals(mode))a.addAll(Arrays.asList("-map","0:v:0","-c:v","copy","-an","-movflags","+faststart"));
+        else if("compress".equals(mode)||"trim".equals(mode)){if("trim".equals(mode)){if(end<=start)throw new IOException("终点需要大于起点");a.addAll(Arrays.asList("-t",String.valueOf(end-start)));}a.addAll(Arrays.asList("-map","0:v:0","-map","0:a:0?","-c:v","libx264","-preset","veryfast","-crf","compress".equals(mode)?"30":"23","-vf","scale=trunc(iw/2)*2:trunc(ih/2)*2","-c:a","aac","-movflags","+faststart"));}
+        else throw new IOException("未知操作");
+        a.addAll(Arrays.asList("-progress","pipe:1","-nostats",out.getAbsolutePath()));progress.update(-1,"正在处理视频…");runFFmpeg(c,a,token,progress);if(!out.isFile()||out.length()==0)throw new IOException("未生成文件");return out;
     }
     static String runFFmpeg(Context context,List<String> arguments,Token token,Progress progress)throws Exception{
         initialize(context);ArrayList<String> command=new ArrayList<>();command.add(new File(context.getApplicationInfo().nativeLibraryDir,"libffmpeg.so").getAbsolutePath());command.addAll(arguments);

@@ -18,7 +18,7 @@
     if (!direct && (/^\d+$/.test(name) || /(?:^|[-_.])(?:init|dashinit|seg(?:ment)?|chunk|frag(?:ment)?)(?:[-_.]|[0-9]|$)/i.test(name))) return;
     if (!direct && !mediaPath.test(url.href) && !playable) return;
     if (seen.has(url.href)) return;
-    seen.add(url.href); report({kind: 'source', url: url.href, mime});
+    seen.add(url.href); report({kind: 'source', url: url.href, mime, title: document.title || '', origin: direct ? 'element' : 'request'});
   }
   function scan() {
     document.querySelectorAll('video').forEach(video => {
@@ -28,6 +28,9 @@
     });
     try { performance.getEntriesByType('resource').forEach(entry => candidate(entry.name)); } catch {}
   }
+  // Debounced DOM observation catches lazy sources and player replacements.
+  let queued = false;
+  try { new MutationObserver(() => { if (!queued) { queued = true; setTimeout(() => { queued = false; scan(); }, 180); } }).observe(document, {subtree: true, childList: true, attributes: true, attributeFilter: ['src', 'type']}); } catch {}
   if (window.fetch) {
     const original = window.fetch;
     window.fetch = function(...args) {

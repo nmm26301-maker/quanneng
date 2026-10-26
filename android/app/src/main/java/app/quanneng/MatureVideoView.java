@@ -45,6 +45,7 @@ public final class MatureVideoView extends FrameLayout {
     public void setOnPreparedListener(IMediaPlayer.OnPreparedListener listener){prepared=listener;}
     public void setOnCompletionListener(IMediaPlayer.OnCompletionListener listener){completion=listener;}
     public void setOnErrorListener(IMediaPlayer.OnErrorListener listener){error=listener;}
+    public void setSubtitleSize(int sp){subtitle.setTextSize(Math.max(16,Math.min(32,sp)));}
     public void setSourceMime(String mime){sourceMime=mime;}
     public void setVideoURI(Uri value,Map<String,String> requestHeaders){
         stopPlayback();uri=value;headers=new HashMap<>(requestHeaders);subtitle.setText("");
@@ -61,7 +62,9 @@ public final class MatureVideoView extends FrameLayout {
         player.setOnCompletionListener(mp->{if(engine==player&&completion!=null)completion.onCompletion(mp);});
         player.setOnErrorListener((mp,what,extra)->engine!=player||error!=null&&error.onError(mp,what,extra));
         if(surface.getHolder().getSurface().isValid())player.setDisplay(surface.getHolder());
-        player.setDataSource(getContext(),value,headers);player.prepareAsync();
+        player.setDataSource(getContext(),value,headers);
+        if(headers.containsKey("Authorization")&&("http".equals(value.getScheme())||"https".equals(value.getScheme())))try{java.net.URL origin=NetworkPolicy.url(value.toString());DataSource.Factory requests=()->new NasDataSource(origin,headers.get("Authorization"));DefaultDataSource.Factory data=new DefaultDataSource.Factory(getContext(),requests);MediaItem.Builder item=new MediaItem.Builder().setUri(value);if(sourceMime!=null&&!sourceMime.isEmpty())item.setMimeType(sourceMime);player.setMediaSource(new DefaultMediaSourceFactory(data).createMediaSource(item.build()));}catch(java.io.IOException e){if(error!=null)error.onError(player,-1004,0);return;}
+        player.prepareAsync();
     }
     private void fitVideo(){
         if(engine==null||engine.getVideoWidth()<=0||engine.getVideoHeight()<=0||getWidth()<=0||getHeight()<=0)return;
@@ -82,7 +85,8 @@ public final class MatureVideoView extends FrameLayout {
         MediaItem.SubtitleConfiguration sub=new MediaItem.SubtitleConfiguration.Builder(source).setMimeType(mime).setLanguage("zh").setSelectionFlags(C.SELECTION_FLAG_DEFAULT).build();
         MediaItem.Builder item=new MediaItem.Builder().setUri(uri).setSubtitleConfigurations(Collections.singletonList(sub));if(sourceMime!=null&&!sourceMime.isEmpty())item.setMimeType(sourceMime);
         DefaultHttpDataSource.Factory http=new DefaultHttpDataSource.Factory().setDefaultRequestProperties(headers);
-        DefaultDataSource.Factory factory=new DefaultDataSource.Factory(getContext(),http);
+        DataSource.Factory requests=http;if(headers.containsKey("Authorization"))try{java.net.URL origin=NetworkPolicy.url(uri.toString());requests=()->new NasDataSource(origin,headers.get("Authorization"));}catch(java.io.IOException ignored){}
+        DefaultDataSource.Factory factory=new DefaultDataSource.Factory(getContext(),requests);
         player.setMediaSource(new DefaultMediaSourceFactory(factory).createMediaSource(item.build()),position);player.prepare();player.setPlayWhenReady(play);
     }
 }

@@ -171,6 +171,7 @@ public final class MainActivity extends PrivateActivity {
                 return;
             }
             String text = intent.getStringExtra(Intent.EXTRA_TEXT);
+            if(text!=null&&text.startsWith(Handoff.PREFIX)){startActivity(new Intent(this,HandoffActivity.class).putExtra("record",text));return;}
             if (text != null) {
                 java.util.regex.Matcher m = java.util.regex.Pattern.compile("https://[^\\s<>\\\"]+").matcher(text);
                 if (m.find()) {
@@ -219,6 +220,7 @@ public final class MainActivity extends PrivateActivity {
     public final class Bridge {
         @JavascriptInterface public String getJumpSteps(){return PrivateSession.isUnlocked()?JumpSteps.json(MainActivity.this).toString():"";}
         @JavascriptInterface public void setJumpSteps(String raw){runOnUiThread(()->{String id=null;try{if(raw==null||raw.length()>300)throw new IllegalArgumentException();JSONObject data=new JSONObject(raw);id=data.getString("id");if(id.length()>80)throw new IllegalArgumentException();if(!trusted()){deliverJumpSteps("请先解锁后保存设置",id);return;}JSONArray array=data.getJSONArray("values");if(array.length()!=4)throw new IllegalArgumentException();int[] values=new int[4];for(int i=0;i<4;i++){values[i]=array.getInt(i);if(array.getDouble(i)!=values[i])throw new IllegalArgumentException();}if(!JumpSteps.save(MainActivity.this,values))throw new IllegalArgumentException();deliverJumpSteps(null,id);}catch(Exception error){deliverJumpSteps("请输入范围内的整数，或检查本机存储空间",id);}});}
+        @JavascriptInterface public void openFeature(String feature){runOnUiThread(()->{if(!trusted())return;Class<?> screen=null;if("library".equals(feature))screen=LibraryActivity.class;else if("vault".equals(feature))screen=VaultActivity.class;else if("nas".equals(feature))screen=NasActivity.class;else if("cast".equals(feature))screen=CastActivity.class;else if("subtitles".equals(feature))screen=SubtitleActivity.class;else if("handoff".equals(feature))screen=HandoffActivity.class;else if("diagnostics".equals(feature))screen=DiagnosticsActivity.class;else if("gestures".equals(feature))screen=GestureSettingsActivity.class;else if("downloads".equals(feature)||"tools".equals(feature))screen=TransferActivity.class;if(screen!=null)startActivity(new Intent(MainActivity.this,screen).putExtra("tools","tools".equals(feature)));});}
         @JavascriptInterface public void openTransfers(){runOnUiThread(()->{if(trusted())startActivity(new Intent(MainActivity.this,TransferActivity.class));});}
         @JavascriptInterface public void openSecuritySettings(){runOnUiThread(()->{if(trusted())changePrivatePassword();});}
         @JavascriptInterface public void lockApp(){runOnUiThread(()->{if(trusted())lockPrivateApp();});}

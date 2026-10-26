@@ -306,3 +306,12 @@ FFmpeg source and build notes: https://github.com/yausername/youtubedl-android/b
 Jackson 2.18.3: Apache-2.0, https://github.com/FasterXML/jackson
 Apache Commons IO 2.18.0, Compress 1.27.1, Codec 1.17.1 and Lang 3.17.0: Apache-2.0, https://commons.apache.org/
 All binary coordinates, exact versions and SHA-256 values are in android/dependencies.lock.json.
+
+
+OkHttp 4.12.0 — Copyright 2023 Square, Inc. — Apache License 2.0
+https://github.com/square/okhttp
+Okio 3.6.0 — Copyright 2023 Square, Inc. — Apache License 2.0
+https://github.com/square/okio
+Both libraries are licensed under Apache License, Version 2.0.
+License text: https://www.apache.org/licenses/LICENSE-2.0
+The complete Apache-2.0 license text is included elsewhere in this notices file.

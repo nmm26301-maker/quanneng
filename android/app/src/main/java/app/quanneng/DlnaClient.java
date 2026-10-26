@@ -1,0 +1,18 @@
+package app.quanneng;
+import android.content.Context;
+import android.net.wifi.WifiManager;
+import java.net.*;
+import java.util.*;
+import org.w3c.dom.*;
+/** 标准 SSDP 发现及 AVTransport 控制；只向局域网设备发送显式选择的 URL。 */
+final class DlnaClient {
+ static final class Device{String name,type;URL control;}
+ static List<Device> discover(Context c)throws Exception{
+  WifiManager wifi=(WifiManager)c.getApplicationContext().getSystemService(Context.WIFI_SERVICE);WifiManager.MulticastLock lock=wifi==null?null:wifi.createMulticastLock("quanneng-dlna");if(lock!=null)lock.acquire();Set<String> locations=new LinkedHashSet<>();
+  try(DatagramSocket socket=new DatagramSocket()){socket.setSoTimeout(700);byte[] request=("M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n").getBytes("UTF-8");socket.send(new DatagramPacket(request,request.length,InetAddress.getByName("239.255.255.250"),1900));long until=System.currentTimeMillis()+3500;while(System.currentTimeMillis()<until&&locations.size()<32){byte[] b=new byte[8192];DatagramPacket p=new DatagramPacket(b,b.length);try{socket.receive(p);if(!NetworkPolicy.privateHost(p.getAddress().getHostAddress()))continue;for(String line:new String(p.getData(),0,p.getLength(),"UTF-8").split("\r?\n"))if(line.toLowerCase(Locale.ROOT).startsWith("location:")){URL u=NetworkPolicy.local(line.substring(9).trim());if(u.getHost().equals(p.getAddress().getHostAddress()))locations.add(u.toString());}}catch(SocketTimeoutException ignored){}}}finally{if(lock!=null&&lock.isHeld())lock.release();}
+  List<Device> result=new ArrayList<>();for(String location:locations){try{Device device=describe(location);if(device!=null)result.add(device);}catch(Exception ignored){}}return result;
+ }
+ static Device describe(String location)throws Exception{URL base=NetworkPolicy.local(location);Document doc=NetworkIO.xml(NetworkIO.request(base,"GET",null,null,null,null));Element root=doc.getDocumentElement();String urlbase=NetworkIO.value(root,"URLBase");URL resolved=urlbase.isEmpty()?base:NetworkPolicy.local(urlbase);NodeList services=root.getElementsByTagNameNS("*","service");for(int i=0;i<services.getLength();i++){Element service=(Element)services.item(i);String type=NetworkIO.value(service,"serviceType");if(type.startsWith("urn:schemas-upnp-org:service:AVTransport:")){URL control=NetworkPolicy.local(new URL(resolved,NetworkIO.value(service,"controlURL")).toString());if(!NetworkPolicy.sameOrigin(base,control))continue;Device d=new Device();d.name=NetworkIO.value(root,"friendlyName");d.type=type;d.control=control;return d;}}return null;}
+ static void action(Device d,String name,String args)throws Exception{String body="<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"><s:Body><u:"+name+" xmlns:u=\""+NetworkIO.escape(d.type)+"\"><InstanceID>0</InstanceID>"+args+"</u:"+name+"></s:Body></s:Envelope>";NetworkIO.request(d.control,"POST",null,"text/xml; charset=utf-8",d.type+"#"+name,body.getBytes("UTF-8"));}
+ static void cast(Device d,String value)throws Exception{NetworkPolicy.url(value);action(d,"SetAVTransportURI","<CurrentURI>"+NetworkIO.escape(value)+"</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>");action(d,"Play","<Speed>1</Speed>");}
+}
