@@ -81,3 +81,9 @@ The current v0.2.4 player uses GSYVideoPlayer 14.0.0's Media3 1.10.1 backend, wi
 - Existing v0.2.5 export/import/share functionality is retained and now authentication-gated. No MANAGE_EXTERNAL_STORAGE, storage-wide scanning, certificate-validation bypass, DRM keys, or arbitrary command-entry feature.
 - Build `--abi arm64-v8a` (default) for the user's Android 13 phone; CI uses `--abi x86_64` for the emulator. Required native payloads are included with extractNativeLibs=true. The new embedded runtimes increase APK size substantially. Dependencies are fetched from official repositories with recorded hashes.
 - Added SecuritySmoke (setup, errors, cooldown, background lock, change password, protected shares), signed test-only password helper for existing playback tests, and TransferSmoke (real CC0 download, FFmpeg conversion, decode validation, private-provider playback and locked-provider refusal). The fixed fixture password exists only in the separate test APK. Source is GPL-3.0 with matching build files and pinned dependency coordinates in this repository.
+
+### Four configurable jumps (v0.2.6)
+
+The fixed six-button layout is replaced by four buttons in this order: back seconds, back minutes, forward seconds, forward minutes. Each has an independent positive integer value (seconds 1–3600, minutes 1–120), saved in private SharedPreferences. Portrait and full-screen use the same values, including the overlay settings dialog. React uses the same native preferences through an acknowledged bridge message; standalone web mode uses localStorage. PlaybackSmoke changes the four values, checks actual seeks, clamps, accumulated taps and reopening persistence.
+
+Shared direct-media URLs resume native playback after password authentication without depending on WebView page readiness. Generic page links continue through the webpage discovery flow.

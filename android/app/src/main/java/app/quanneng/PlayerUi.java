@@ -22,14 +22,18 @@ final class PlayerUi {
     static ImageButton icon(Context c,String name,String label,boolean primary){ImageButton b=new ImageButton(c);b.setScaleType(ImageView.ScaleType.FIT_CENTER);b.setMinimumWidth(dp(c,48));b.setMinimumHeight(dp(c,48));b.setPadding(dp(c,13),dp(c,13),dp(c,13),dp(c,13));b.setBackground(feedback(c,primary?ACCENT:0x00212B2E,primary?28:14));setIcon(b,name,label,primary);return b;}
     static void setIcon(ImageButton b,String name,String label,boolean primary){b.setImageDrawable(new Glyph(name,primary?BG:TEXT));b.setContentDescription(label);b.setTooltipText(label);}
     static boolean motionEnabled(){return ValueAnimator.areAnimatorsEnabled();}
-    static Button jumpButton(Context c,int seconds,boolean compact){
-        Button b=chip(c,"");int amount=Math.abs(seconds)>=60?Math.abs(seconds)/60:Math.abs(seconds);String number=String.valueOf(amount),unit=Math.abs(seconds)>=60?(compact?"分":"分钟"):"秒";
-        SpannableString label=new SpannableString(number+(compact?"":"\n")+unit);label.setSpan(new RelativeSizeSpan(compact?1.14f:1.3f),0,number.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);label.setSpan(new StyleSpan(Typeface.BOLD),0,number.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);label.setSpan(new RelativeSizeSpan(.86f),label.length()-unit.length(),label.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        b.setText(label);b.setGravity(Gravity.CENTER);b.setIncludeFontPadding(false);b.setMaxLines(compact?1:2);b.setPadding(dp(c,8),0,dp(c,8),0);b.setStateListAnimator(null);b.setElevation(0);
+    static Button jumpButton(Context c,int amount,boolean minutes,boolean forward,boolean compact){
+        Button b=chip(c,"");b.setGravity(Gravity.CENTER);b.setIncludeFontPadding(false);b.setMaxLines(compact?1:2);b.setPadding(dp(c,8),0,dp(c,8),0);b.setStateListAnimator(null);b.setElevation(0);
         StateListDrawable states=new StateListDrawable();GradientDrawable active=surface(c,0xFF24382C,14);active.setStroke(dp(c,1),ACCENT);states.addState(new int[]{android.R.attr.state_pressed},active);GradientDrawable focus=surface(c,0xFF24382C,14);focus.setStroke(dp(c,2),ACCENT);states.addState(new int[]{android.R.attr.state_focused},focus);
         GradientDrawable base=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xFF1A272B,0xFF152024});base.setCornerRadius(dp(c,14));base.setStroke(dp(c,1),0xFF3B4D4E);states.addState(new int[]{},base);b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x40B8ED96),states,surface(c,Color.WHITE,14)));
-        Glyph arrow=new Glyph("jump_"+(seconds<0?"back":"forward")+(Math.abs(seconds)==600?"_double":""),seconds<0?MUTED:ACCENT);arrow.setBounds(0,0,dp(c,compact?16:18),dp(c,compact?16:18));b.setCompoundDrawablesRelative(arrow,null,null,null);b.setCompoundDrawablePadding(dp(c,4));String direction=seconds<0?"后退":"前进";b.setContentDescription(direction+amount+(Math.abs(seconds)>=60?"分钟":"秒"));b.setTooltipText(b.getContentDescription());return b;
+        setJumpLabel(b,amount,minutes,forward,compact);return b;
     }
+    static void setJumpLabel(Button b,int amount,boolean minutes,boolean forward,boolean compact){
+        Context c=b.getContext();String number=(forward?"+":"−")+amount,unit=minutes?(compact?"分":"分钟"):"秒";
+        SpannableString label=new SpannableString(number+(compact?"":"\n")+unit);label.setSpan(new RelativeSizeSpan(compact?1.14f:1.3f),0,number.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);label.setSpan(new StyleSpan(Typeface.BOLD),0,number.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);label.setSpan(new RelativeSizeSpan(.86f),label.length()-unit.length(),label.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);b.setText(label);
+        Glyph arrow=new Glyph("jump_"+(forward?"forward":"back"),forward?ACCENT:MUTED);arrow.setBounds(0,0,dp(c,compact?16:18),dp(c,compact?16:18));b.setCompoundDrawablesRelative(arrow,null,null,null);b.setCompoundDrawablePadding(dp(c,4));b.setContentDescription((forward?"前进":"后退")+amount+(minutes?"分钟":"秒"));b.setTooltipText(b.getContentDescription());
+    }
+
     static boolean pressMotion(View view,MotionEvent event){
         int action=event.getActionMasked();if(action!=MotionEvent.ACTION_DOWN&&action!=MotionEvent.ACTION_UP&&action!=MotionEvent.ACTION_CANCEL)return false;
         view.animate().cancel();boolean down=action==MotionEvent.ACTION_DOWN;

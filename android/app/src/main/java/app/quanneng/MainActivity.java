@@ -173,7 +173,12 @@ public final class MainActivity extends PrivateActivity {
             String text = intent.getStringExtra(Intent.EXTRA_TEXT);
             if (text != null) {
                 java.util.regex.Matcher m = java.util.regex.Pattern.compile("https://[^\\s<>\\\"]+").matcher(text);
-                if (m.find()) pendingUrl = m.group();
+                if (m.find()) {
+                    String url=m.group();
+                    if(java.util.regex.Pattern.compile("(?i)\\.(mp4|m3u8|mpd|webm|m4v|mov|mkv)(?:[?#]|$)").matcher(url).find()) {
+                        try {launchMedia(new JSONObject().put("url",url));} catch(JSONException ignored) {}
+                    } else pendingUrl=url;
+                }
             }
         } else if (Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())) {
             ArrayList<Uri> shared=intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
@@ -207,13 +212,17 @@ public final class MainActivity extends PrivateActivity {
         if(imported!=null)imported.close();
         web.removeJavascriptInterface("Quanneng"); web.destroy(); super.onDestroy();
     }
-    @Override protected void onPrivateUnlocked(){foreground=true;if(web!=null){web.onResume();deliverPendingUrl();}}
+    @Override protected void onPrivateUnlocked(){foreground=true;if(web!=null){web.onResume();deliverPendingUrl();deliverJumpSteps(null);}}
     @Override protected void onPrivateLocked(){foreground=false;if(web!=null)web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause())",null);}
+    private void deliverJumpSteps(String error){deliverJumpSteps(error,null);}
+    private void deliverJumpSteps(String error,String requestId){if(web==null||web.getUrl()==null||!web.getUrl().startsWith(ORIGIN))return;try{JSONObject data=new JSONObject();data.put("values",JumpSteps.json(this));if(error!=null)data.put("error",error);if(requestId!=null)data.put("requestId",requestId);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('quanneng-jumps',{detail:"+data.toString()+"}))",null);}catch(JSONException ignored){}}
     public final class Bridge {
+        @JavascriptInterface public String getJumpSteps(){return PrivateSession.isUnlocked()?JumpSteps.json(MainActivity.this).toString():"";}
+        @JavascriptInterface public void setJumpSteps(String raw){runOnUiThread(()->{String id=null;try{if(raw==null||raw.length()>300)throw new IllegalArgumentException();JSONObject data=new JSONObject(raw);id=data.getString("id");if(id.length()>80)throw new IllegalArgumentException();if(!trusted()){deliverJumpSteps("请先解锁后保存设置",id);return;}JSONArray array=data.getJSONArray("values");if(array.length()!=4)throw new IllegalArgumentException();int[] values=new int[4];for(int i=0;i<4;i++){values[i]=array.getInt(i);if(array.getDouble(i)!=values[i])throw new IllegalArgumentException();}if(!JumpSteps.save(MainActivity.this,values))throw new IllegalArgumentException();deliverJumpSteps(null,id);}catch(Exception error){deliverJumpSteps("请输入范围内的整数，或检查本机存储空间",id);}});}
         @JavascriptInterface public void openTransfers(){runOnUiThread(()->{if(trusted())startActivity(new Intent(MainActivity.this,TransferActivity.class));});}
         @JavascriptInterface public void openSecuritySettings(){runOnUiThread(()->{if(trusted())changePrivatePassword();});}
         @JavascriptInterface public void lockApp(){runOnUiThread(()->{if(trusted())lockPrivateApp();});}
-        @JavascriptInterface public void frontendReady() { runOnUiThread(()->deliverPendingUrl()); }
+        @JavascriptInterface public void frontendReady() { runOnUiThread(()->{deliverPendingUrl();if(trusted())deliverJumpSteps(null);}); }
         @JavascriptInterface public void openWebsite(String url) { runOnUiThread(()->{if(trusted())openBrowser(url);}); }
         @JavascriptInterface public void enterPip(){runOnUiThread(()->{if(trusted())toast("私人模式下暂不支持画中画");});}
         @JavascriptInterface public void systemPlay(String url) { runOnUiThread(()->{if(trusted()&&isHttps(url)){try{JSONObject request=new JSONObject();request.put("url",url);launchMedia(request);}catch(JSONException ignored){}}}); }

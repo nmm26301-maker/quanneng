@@ -23,7 +23,7 @@ public final class PlaybackSmoke extends Instrumentation {
             exerciseFullscreen(network);report("Fullscreen, preserved pause, control visibility and system back verified");
             runOnMainSync(network::finish);SystemClock.sleep(500);
             Activity local=open(Intent.ACTION_VIEW,Uri.parse("content://app.quanneng.tests.fixture/seek-fixture.mp4"));
-            awaitPlayable(local);report("Local content URI decoded and position advanced");exerciseJumps(local);report("All six fullscreen jumps, portrait action, boundaries and repeated taps verified");runOnMainSync(local::finish);
+            awaitPlayable(local);report("Local content URI decoded and position advanced");exerciseJumps(local);report("All four configured fullscreen jumps, portrait action, boundaries and repeated taps verified");runOnMainSync(local::finish);SystemClock.sleep(300);Activity reopened=open(Intent.ACTION_VIEW,Uri.parse("content://app.quanneng.tests.fixture/seek-fixture.mp4"));awaitPlayable(reopened);assertCustomSteps(reopened);report("Custom jump times persisted across native player restart");runOnMainSync(reopened::finish);
             result.putString("stream","QUANNENG_SMOKE_OK\n");finish(Activity.RESULT_OK,result);
         }catch(Throwable error){result.putString("stream","QUANNENG_SMOKE_FAILED: "+error.toString()+"\n");finish(Activity.RESULT_CANCELED,result);}
     }
@@ -62,17 +62,22 @@ public final class PlaybackSmoke extends Instrumentation {
     }
     private void exerciseJumps(Activity activity)throws Exception{
         if(state(activity)[0]<1299000)throw new AssertionError("Long seek fixture missing");
-        setPosition(activity,650000);runOnMainSync(()->{View b=activity.findViewById(1104);b.requestRectangleOnScreen(new android.graphics.Rect(0,0,b.getWidth(),b.getHeight()),true);});tapControl(activity,1104);awaitPosition(activity,710000);
+        runOnMainSync(()->activity.findViewById(1151).performClick());SystemClock.sleep(200);
+        runOnMainSync(()->{try{android.app.Dialog dialog=(android.app.Dialog)PrivateTestAccess.field(activity,"jumpDialog");int[] values={7,2,13,3};for(int i=0;i<4;i++)((android.widget.EditText)dialog.findViewById(1700+i)).setText(String.valueOf(values[i]));dialog.findViewById(1705).performClick();}catch(Exception error){throw new RuntimeException(error);}});SystemClock.sleep(200);
+        assertCustomSteps(activity);
+        setPosition(activity,650000);runOnMainSync(()->{View button=activity.findViewById(1102);button.requestRectangleOnScreen(new android.graphics.Rect(0,0,button.getWidth(),button.getHeight()),true);});tapControl(activity,1102);awaitPosition(activity,663000);
         runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,true);SystemClock.sleep(700);
-        int[] deltas={-600,-60,-10,10,60,600};for(int i=0;i<deltas.length;i++){
+        AtomicReference<Integer> count=new AtomicReference<>();runOnMainSync(()->count.set(((android.view.ViewGroup)activity.findViewById(1250)).getChildCount()));if(count.get()!=4)throw new AssertionError("Fullscreen must contain exactly four custom jump actions");
+        int[] deltas={-7,-120,13,180};for(int i=0;i<deltas.length;i++){
             setPosition(activity,650000);tapControl(activity,1200+i);AtomicReference<Boolean> feedback=new AtomicReference<>(false);runOnMainSync(()->feedback.set(activity.findViewById(1300).getVisibility()==View.VISIBLE));if(!feedback.get())throw new AssertionError("Jump feedback missing");awaitPosition(activity,650000+deltas[i]*1000);
             if(i==2)snapshot("JUMP_CONTROLS");
         }
-        setPosition(activity,500000);tapControl(activity,1203);tapControl(activity,1203);tapControl(activity,1203);awaitPosition(activity,530000);
-        setPosition(activity,50000);tapControl(activity,1200);awaitPosition(activity,0);
-        setPosition(activity,1250000);tapControl(activity,1205);awaitPosition(activity,1300000);
+        setPosition(activity,500000);tapControl(activity,1202);tapControl(activity,1202);tapControl(activity,1202);awaitPosition(activity,539000);
+        setPosition(activity,5000);tapControl(activity,1200);awaitPosition(activity,0);
+        setPosition(activity,1295000);tapControl(activity,1202);awaitPosition(activity,1300000);
         runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,false);
     }
+    private void assertCustomSteps(Activity activity){runOnMainSync(()->{String[] labels={"后退7秒","后退2分钟","前进13秒","前进3分钟"};for(int i=0;i<4;i++)if(!labels[i].contentEquals(activity.findViewById(1100+i).getContentDescription()))throw new AssertionError("Custom jump label or persistence mismatch: "+i);if(activity.findViewById(1104)!=null||activity.findViewById(1204)!=null)throw new AssertionError("Old fixed jump buttons remain");});}
     private void setPosition(Activity activity,int position)throws Exception{runOnMainSync(()->{PlaybackView v=new PlaybackView(activity.findViewById(1000));v.pause();v.seekTo(position);});awaitPosition(activity,position);SystemClock.sleep(500);}
     private void awaitPosition(Activity activity,int target)throws Exception{
         long deadline=SystemClock.elapsedRealtime()+8000;
