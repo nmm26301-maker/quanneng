@@ -23,6 +23,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Verify release signing guard
+        run: python3 -m unittest discover -s android/tests -p test_signing.py -v
       - name: Check media request header policy
         run: |
           mkdir -p android/build/header-tests
@@ -40,7 +42,7 @@ jobs:
           echo "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0  $RUNNER_TEMP/platform.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/build-tools.zip" -d "$RUNNER_TEMP/quanneng-sdk"
           unzip -q "$RUNNER_TEMP/platform.zip" -d "$RUNNER_TEMP/quanneng-sdk"
-      - run: python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-debug.apk" --abi x86_64
+      - run: python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-debug.apk" --abi x86_64 --development-signing
       - name: Check bounded local media endpoint
         run: |
           mkdir -p android/build/range-tests

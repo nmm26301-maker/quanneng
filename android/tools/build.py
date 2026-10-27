@@ -2,8 +2,11 @@
 """Compile an offline Android APK using official SDK build tools and Java 17+."""
 import argparse, os, pathlib, shutil, subprocess, zipfile, xml.etree.ElementTree as ET
 from dependencies import prepare
+from signing import prepare_signing
 root=pathlib.Path(__file__).resolve().parents[2]
-p=argparse.ArgumentParser();p.add_argument('--sdk',required=True);p.add_argument('--keystore',required=True);p.add_argument('--out',required=True);p.add_argument('--compiler-jar');p.add_argument('--abi',choices=['arm64-v8a','x86_64'],default='arm64-v8a');args=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--sdk',required=True);p.add_argument('--keystore',required=True);p.add_argument('--out',required=True);p.add_argument('--compiler-jar');p.add_argument('--abi',choices=['arm64-v8a','x86_64'],default='arm64-v8a');p.add_argument('--development-signing',action='store_true',help='Explicit test-only signing; incompatible with installed release apps');args=p.parse_args()
+try:key,env,signing_fingerprint=prepare_signing(args.keystore,args.development_signing)
+except ValueError as error:raise SystemExit(str(error))
 sdk=pathlib.Path(args.sdk).resolve();tools=sdk/'android-15';platform=sdk/'android-35'/'android.jar'
 for f in [tools/'aapt2',tools/'zipalign',tools/'apksigner',tools/'d8',platform]:
  if not f.is_file():raise SystemExit(f'Missing SDK component: {f}')
@@ -44,15 +47,8 @@ with zipfile.ZipFile(build/'base.apk','a',compression=zipfile.ZIP_DEFLATED) as a
  for library in libraries:
   for native in (library/'jni'/args.abi).glob('*.so'):apk.write(native,'lib/'+args.abi+'/'+native.name)
 run(tools/'zipalign','-f','4',build/'base.apk',build/'aligned.apk')
-key=pathlib.Path(args.keystore).resolve();key.parent.mkdir(parents=True,exist_ok=True)
-password=os.environ.get('QUANNENG_STORE_PASSWORD','android')
-if not key.exists():
- run('keytool','-genkeypair','-keystore',key,'-storepass',password,'-keypass',password,'-alias','quanneng','-keyalg','RSA','-keysize','2048','-validity','10000','-dname','CN=Quanneng Development, O=Quanneng, C=CN','-noprompt')
- os.chmod(key,0o600)
 out=pathlib.Path(args.out).resolve();out.parent.mkdir(parents=True,exist_ok=True)
-# Password uses the standard development default unless supplied by the caller.
-env=os.environ.copy();env['QUANNENG_STORE_PASSWORD']=password
 subprocess.run([str(tools/'apksigner'),'sign','--ks',str(key),'--ks-key-alias','quanneng','--ks-pass','env:QUANNENG_STORE_PASSWORD','--key-pass','env:QUANNENG_STORE_PASSWORD','--out',str(out),str(build/'aligned.apk')],check=True,env=env)
 run(tools/'apksigner','verify','--verbose',out)
 run(tools/'aapt2','dump','badging',out)
-print(f'APK ready: {out}')
+print(f"{'Development APK (not a release upgrade)' if args.development_signing else 'Release APK'} ready: {out}\nCertificate SHA-256: {signing_fingerprint}")
