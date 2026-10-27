@@ -55,6 +55,10 @@ jobs:
 
       - name: Download public playback fixture and build instrumentation APK
         run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
           ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=160x90:rate=15 -t 18 -c:v libx264 -preset veryfast -b:v 80k -maxrate 100k -bufsize 160k -pix_fmt yuv420p -movflags +faststart -y android/tests/assets/buffer-fixture.mp4
           curl --fail --location --retry 3 https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4 -o android/tests/assets/flower.mp4
           python3 android/tools/build-tests.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-tests.apk"
