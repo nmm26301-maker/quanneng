@@ -83,3 +83,9 @@ Private access follows platform [Android Keystore](https://developer.android.com
 ## v0.3.1：本地视频临时投屏与接力
 
 比较 NanoHttpd/nanohttpd（BSD-3-Clause，仓库最近推送 2023-07）与 yanzhenjie/AndServer（Apache-2.0，最近推送 2023-06）。两者均非近期活跃发布，未把它们描述为持续活跃维护。选择固定 NanoHTTPD 2.3.1 的小型核心作为 HTTP 解析和连接层，避免引入 Web 框架及注解构建链；SHA-256 与 Maven 坐标已固定，完整 BSD 许可证随包附带。应用未启用其目录、上传或文件服务器扩展，只发布一个已选择的视频副本；自己的封装限制私网来源、随机会话路径、方法、单一 Range、30 分钟时限和 4 个工作连接/4 个排队连接。测试覆盖端点边界、后台生命周期、访问撤销及真实 Media3 读取。
+
+### v0.3.2 系统验证与横屏交互
+
+本次不增加外部依赖。系统验证使用 Android 平台 BiometricPrompt（API 28+）和 KeyguardManager 凭据页，API 30+ 请求 BIOMETRIC_STRONG | DEVICE_CREDENTIAL，API 29 使用其兼容凭据标志。系统取消不会切换为成功；请求与会话 generation 绑定，屏幕关闭或手动锁定会废弃旧授权。未设系统锁屏时可打开系统安全设置，或使用既有 PBKDF2 私人密码流程。后台授权仅保留于进程内 5 分钟，屏幕关闭立即失效。横屏控制避免导航栏与系统手势区域，触摸探索继续采用原生 SeekBar。
+
+参考：Android 官方 BiometricPrompt.Builder API、KeyguardManager API 与 edge-to-edge system gesture insets 文档。真实设备指纹及不同厂商布局仍需实测。

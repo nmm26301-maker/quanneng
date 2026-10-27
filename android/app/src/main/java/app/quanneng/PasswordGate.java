@@ -34,7 +34,8 @@ final class PasswordGate extends Dialog {
             TextView note=PlayerUi.text(owner,"验证由 Android 系统完成。锁屏、手动锁定或离开超过 5 分钟后再次验证。",12,PlayerUi.MUTED);note.setPadding(0,dp(24),0,0);box.addView(note);return;
         }
         TextView title=PlayerUi.text(owner,change?"修改私人密码":setup?"设置私人密码":"欢迎回来",28,PlayerUi.TEXT);box.addView(title);
-        TextView hint=PlayerUi.text(owner,change?"先验证旧密码，再设置新密码。":setup?"手机尚未设置系统锁屏密码。可设置 8–64 位备用密码。":"输入备用密码。解锁后页面切换和短暂返回不重复验证。",14,PlayerUi.MUTED);hint.setPadding(0,dp(10),0,dp(24));box.addView(hint);
+        TextView hint=PlayerUi.text(owner,change?"先验证旧密码，再设置新密码。":setup?(managing?"可选：创建 8–64 位备用密码，系统验证仍优先。":"手机尚未设置系统锁屏密码。可设置 8–64 位备用密码。"):"输入备用密码。解锁后页面切换和短暂返回不重复验证。",14,PlayerUi.MUTED);hint.setPadding(0,dp(10),0,dp(24));box.addView(hint);
+        if(setup&&!managing){Button settings=PlayerUi.chip(owner,"去设置系统锁屏密码");box.addView(settings,new LinearLayout.LayoutParams(-1,dp(52)));settings.setOnClickListener(v->{try{owner.startActivity(new android.content.Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS));}catch(android.content.ActivityNotFoundException unavailable){error.setText("请在手机系统设置中设置锁屏密码");}});}
         if(change)previous=field(box,"当前密码",1503);
         password=field(box,setup||change?"新密码":"密码",1500);if(setup||change)confirmation=field(box,"再次输入新密码",1501);
         CheckBox show=new CheckBox(owner);show.setText("显示密码");show.setTextColor(PlayerUi.MUTED);show.setMinHeight(dp(48));box.addView(show);show.setOnCheckedChangeListener((button,checked)->{for(EditText input:new EditText[]{previous,password,confirmation})if(input!=null){int position=input.getSelectionStart();input.setTransformationMethod(checked?HideReturnsTransformationMethod.getInstance():PasswordTransformationMethod.getInstance());input.setSelection(Math.max(0,position));}});

@@ -16,6 +16,7 @@ final class DeviceUnlock {
     static boolean available(android.content.Context c){KeyguardManager k=c.getSystemService(KeyguardManager.class);return k!=null&&k.isDeviceSecure();}
     boolean credentialActive(){return active&&credential;}
     void start(){
+        if(active&&epoch!=PrivateSession.generation())stop();
         if(active||!available(owner))return;
         active=true;pending=false;credential=false;epoch=PrivateSession.generation();final long id=++requestId;
         owner.systemUnlockMessage("请完成系统验证");
