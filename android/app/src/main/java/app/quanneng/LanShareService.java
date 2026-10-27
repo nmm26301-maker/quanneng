@@ -19,7 +19,7 @@ public final class LanShareService extends Service {
     private volatile long generation;
     private File folder;
     private PowerManager.WakeLock wake;private android.net.wifi.WifiManager.WifiLock wifi;
-    static boolean allowed(Uri source){return source!=null&&"content".equals(source.getScheme())&&!("app.quanneng.media".equals(source.getAuthority())&&source.getPathSegments().contains("vault-open"));}
+    static boolean allowed(Uri source){return source!=null&&"content".equals(source.getScheme())&&!(MediaContentProvider.AUTHORITY.equals(source.getAuthority())&&source.getPathSegments().contains("vault-open"));}
     static boolean request(Context context,Uri source){
         if(!PrivateSession.isUnlocked()||!allowed(source))return false;
         url="";phase="正在准备本地视频…";

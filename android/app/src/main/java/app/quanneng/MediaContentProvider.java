@@ -10,7 +10,8 @@ import java.util.*;
 
 /** 仅本应用可读的下载/转换结果；路径受限且未解锁时拒绝新读取。 */
 public final class MediaContentProvider extends ContentProvider {
-    static Uri uri(File file){return new Uri.Builder().scheme("content").authority("app.quanneng.media").appendPath(file.getParentFile().getName()).appendPath(file.getName()).build();}
+    static final String AUTHORITY="app.quanneng.next.media";
+    static Uri uri(File file){return new Uri.Builder().scheme("content").authority(MediaContentProvider.AUTHORITY).appendPath(file.getParentFile().getName()).appendPath(file.getName()).build();}
     @Override public boolean onCreate(){return true;}
     private File file(Uri uri)throws FileNotFoundException{
         if(!PrivateSession.isUnlocked())throw new FileNotFoundException("需要先解锁全能");

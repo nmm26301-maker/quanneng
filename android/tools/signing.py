@@ -4,8 +4,8 @@ import os
 import pathlib
 import subprocess
 
-# Independently extracted from both released v0.3.0 and v0.3.1 APKs.
-RELEASE_CERT_SHA256 = 'abe1a59776d2744f969ca727871a2aa805e4dd1ab7819fec404fdc0d28c7c388'
+# Dedicated permanent release signer for the separate app.quanneng.next application.
+RELEASE_CERT_SHA256 = 'bf6f9d9599d42993eb0160efd5d71a070f75d0d5ffc0c0a87bf8bb04d8c8e182'
 
 
 def certificate_sha256(key, env):
@@ -24,7 +24,7 @@ def prepare_signing(path, development=False):
     env.setdefault('QUANNENG_STORE_PASSWORD', 'android')
     if not key.is_file():
         if not development:
-            raise ValueError('Original release keystore is missing. Refusing to create a replacement key.')
+            raise ValueError('Permanent Quanneng Next release keystore is missing. Refusing to create a replacement key.')
         key.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run([
             'keytool', '-genkeypair', '-keystore', str(key),
@@ -38,5 +38,5 @@ def prepare_signing(path, development=False):
         os.chmod(key, 0o600)
     fingerprint = certificate_sha256(key, env)
     if not development and fingerprint != RELEASE_CERT_SHA256:
-        raise ValueError('Signing certificate differs from v0.3.0/v0.3.1. Refusing incompatible upgrade build.')
+        raise ValueError('Signing certificate differs from the pinned Quanneng Next release certificate. Refusing incompatible upgrade build.')
     return key, env, fingerprint

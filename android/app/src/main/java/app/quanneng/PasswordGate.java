@@ -26,6 +26,7 @@ final class PasswordGate extends Dialog {
         ScrollView scroll=new ScrollView(owner);scroll.setFillViewport(true);scroll.setBackgroundColor(PlayerUi.BG);setContentView(scroll);
         LinearLayout box=new LinearLayout(owner);box.setOrientation(1);box.setGravity(Gravity.CENTER_VERTICAL);box.setPadding(dp(28),dp(32),dp(28),dp(32));scroll.addView(box,new ScrollView.LayoutParams(-1,-1));
         ImageView logo=new ImageView(owner);logo.setImageResource(app.quanneng.R.drawable.quanneng_icon);logo.setContentDescription("全能");LinearLayout.LayoutParams icon=new LinearLayout.LayoutParams(dp(88),dp(88));icon.bottomMargin=dp(24);box.addView(logo,icon);
+        TextView edition=PlayerUi.text(owner,"全能新版 · 与旧版数据独立，旧版可继续保留",12,PlayerUi.MUTED);edition.setPadding(0,0,0,dp(16));box.addView(edition);
         if(systemMode){
             box.addView(PlayerUi.text(owner,"欢迎回来",28,PlayerUi.TEXT));TextView hint=PlayerUi.text(owner,"优先使用系统指纹或锁屏密码，无需另设全能密码。解锁后，页面切换和短暂返回不重复验证。",14,PlayerUi.MUTED);hint.setPadding(0,dp(16),0,dp(24));box.addView(hint);
             error=PlayerUi.text(owner,"",14,PlayerUi.MUTED);error.setId(1504);error.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);box.addView(error);

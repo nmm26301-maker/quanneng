@@ -22,14 +22,14 @@ public final class PlaybackSmoke extends Instrumentation {
             exerciseLoop(network);report("Native AB interval repeated successfully");
             exerciseFullscreen(network);report("Fullscreen, preserved pause, control visibility and system back verified");
             runOnMainSync(network::finish);SystemClock.sleep(500);
-            Activity local=open(Intent.ACTION_VIEW,Uri.parse("content://app.quanneng.tests.fixture/seek-fixture.mp4"));
-            awaitPlayable(local);report("Local content URI decoded and position advanced");exerciseJumps(local);report("All four configured fullscreen jumps, portrait action, boundaries and repeated taps verified");runOnMainSync(local::finish);SystemClock.sleep(300);Activity reopened=open(Intent.ACTION_VIEW,Uri.parse("content://app.quanneng.tests.fixture/seek-fixture.mp4"));awaitPlayable(reopened);assertCustomSteps(reopened);report("Custom jump times persisted across native player restart");runOnMainSync(reopened::finish);
+            Activity local=open(Intent.ACTION_VIEW,Uri.parse("content://app.quanneng.next.tests.fixture/seek-fixture.mp4"));
+            awaitPlayable(local);report("Local content URI decoded and position advanced");exerciseJumps(local);report("All four configured fullscreen jumps, portrait action, boundaries and repeated taps verified");runOnMainSync(local::finish);SystemClock.sleep(300);Activity reopened=open(Intent.ACTION_VIEW,Uri.parse("content://app.quanneng.next.tests.fixture/seek-fixture.mp4"));awaitPlayable(reopened);assertCustomSteps(reopened);report("Custom jump times persisted across native player restart");runOnMainSync(reopened::finish);
             result.putString("stream","QUANNENG_SMOKE_OK\n");finish(Activity.RESULT_OK,result);
         }catch(Throwable error){result.putString("stream","QUANNENG_SMOKE_FAILED: "+error.toString()+"\n");finish(Activity.RESULT_CANCELED,result);}
     }
     private Activity open(String action,Uri uri)throws Exception{
         ActivityMonitor monitor=addMonitor("app.quanneng.SystemPlayerActivity",null,false);
-        Intent intent=new Intent().setComponent(new ComponentName("app.quanneng","app.quanneng.MainActivity")).setAction(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        Intent intent=new Intent().setComponent(new ComponentName("app.quanneng.next","app.quanneng.MainActivity")).setAction(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
         if(Intent.ACTION_SEND.equals(action))intent.setType("text/plain").putExtra(Intent.EXTRA_TEXT,uri.toString());else intent.setDataAndType(uri,"video/mp4");
         runOnMainSync(()->getTargetContext().startActivity(intent));Activity player=waitForMonitorWithTimeout(monitor,45000);removeMonitor(monitor);
         if(player==null)throw new AssertionError("Main app did not route media into native player");PrivateTestAccess.awaitUnlocked(this,player);return player;

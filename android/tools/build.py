@@ -36,7 +36,7 @@ for library in libraries:
 run(tools/'aapt2','compile','--dir',source/'res','-o',build/'resources.zip')
 overlay_args=[]
 for resource in library_resources+[build/'resources.zip']:overlay_args.extend(['-R',resource])
-run(tools/'aapt2','link','--auto-add-overlay','-o',build/'base.apk','-I',platform,'--manifest',source/'AndroidManifest.xml','--java',build/'generated','--extra-packages',':'.join(library_packages),'--min-sdk-version','26','--target-sdk-version','35','-A',web,*overlay_args)
+run(tools/'aapt2','link','--auto-add-overlay','-o',build/'base.apk','-I',platform,'--manifest',source/'AndroidManifest.xml','--java',build/'generated','--custom-package','app.quanneng','--extra-packages',':'.join(library_packages),'--min-sdk-version','26','--target-sdk-version','35','-A',web,*overlay_args)
 java=visible_files(source/'java','*.java')+visible_files(build/'generated','*.java')
 compiler=['java','-jar',args.compiler_jar] if args.compiler_jar else ['javac']
 classpath=os.pathsep.join(str(x) for x in [platform]+[library/'classes.jar' for library in libraries])

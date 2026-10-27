@@ -15,7 +15,7 @@ public final class SystemUnlockSmoke extends Instrumentation {
     @Override public void onCreate(Bundle args){super.onCreate(args);start();}
     @Override public void onStart(){Bundle result=new Bundle();try{
         getTargetContext().getSharedPreferences("private-lock-v1",0).edit().clear().commit();
-        Activity activity=startActivitySync(new Intent().setComponent(new ComponentName("app.quanneng","app.quanneng.MainActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
+        Activity activity=startActivitySync(new Intent().setComponent(new ComponentName("app.quanneng.next","app.quanneng.MainActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));
         awaitCredential();if(PrivateTestAccess.unlocked())throw new AssertionError("System gate unlocked before verification");report("Real system credential shown without creating an app password");
         boolean cancelled=false;for(int attempt=0;attempt<2&&!cancelled;attempt++){getUiAutomation().performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);long cancelDeadline=SystemClock.elapsedRealtime()+4000;while(SystemClock.elapsedRealtime()<cancelDeadline){java.util.concurrent.atomic.AtomicBoolean observed=new java.util.concurrent.atomic.AtomicBoolean();runOnMainSync(()->{try{Dialog d=PrivateTestAccess.gate(activity);android.widget.TextView message=d==null?null:d.findViewById(1504);observed.set(d!=null&&d.isShowing()&&!activity.isFinishing()&&message!=null&&message.getText().toString().contains("验证已取消"));}catch(Exception ignored){}});if(observed.get()){cancelled=true;break;}SystemClock.sleep(100);}}
         if(!cancelled||PrivateTestAccess.unlocked())throw new AssertionError("Cancelled system prompt did not return to the locked gate");
@@ -30,7 +30,7 @@ public final class SystemUnlockSmoke extends Instrumentation {
     private void homeAndReturn(Activity activity,boolean expire)throws Exception{
         getUiAutomation().performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME);SystemClock.sleep(500);
         if(expire){Class<?> session=Class.forName("app.quanneng.PrivateSession");Field at=session.getDeclaredField("backgroundUntil");at.setAccessible(true);at.setLong(null,1);}
-        runOnMainSync(()->getTargetContext().startActivity(new Intent().setComponent(new ComponentName("app.quanneng","app.quanneng.MainActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)));SystemClock.sleep(500);
+        runOnMainSync(()->getTargetContext().startActivity(new Intent().setComponent(new ComponentName("app.quanneng.next","app.quanneng.MainActivity")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)));SystemClock.sleep(500);
     }
     private AccessibilityNodeInfo credential(){AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();if(root==null)return null;List<AccessibilityNodeInfo> fields=root.findAccessibilityNodeInfosByViewId("com.android.systemui:id/lockPassword");if(!fields.isEmpty())return fields.get(0);return findEditable(root);}
     private AccessibilityNodeInfo findEditable(AccessibilityNodeInfo node){if(node==null)return null;if(node.isEditable()&&("com.android.systemui".equals(String.valueOf(node.getPackageName()))||"com.android.settings".equals(String.valueOf(node.getPackageName()))))return node;for(int i=0;i<node.getChildCount();i++){AccessibilityNodeInfo found=findEditable(node.getChild(i));if(found!=null)return found;}return null;}

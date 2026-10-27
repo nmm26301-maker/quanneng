@@ -57,6 +57,8 @@ jobs:
         run: |
           curl --fail --location --retry 3 https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4 -o android/tests/assets/flower.mp4
           python3 android/tools/build-tests.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-tests.apk"
+          python3 -c "import sys, os; sys.path.insert(0, 'android/tools'); from signing import prepare_signing; prepare_signing(os.environ['RUNNER_TEMP'] + '/legacy-fixture.p12', development=True)"
+          python3 android/tools/build-tests.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/legacy-fixture.p12" --out "$RUNNER_TEMP/Quanneng-legacy-fixture.apk" --legacy
       - name: Set up Android emulator tools
         uses: android-actions/setup-android@035682743ab223ec9c6169af09811dff8247e520
         with:
@@ -78,32 +80,38 @@ jobs:
           script: |
             adb install -r "$RUNNER_TEMP/Quanneng-debug.apk"
             adb install -r "$RUNNER_TEMP/Quanneng-tests.apk"
+            adb install -r "$RUNNER_TEMP/Quanneng-legacy-fixture.apk"
+            timeout 90s adb shell am instrument -w -e phase prepare app.quanneng.next.tests/app.quanneng.tests.CoexistenceSmoke | tee "$RUNNER_TEMP/coexist-prepare.txt"
+            grep -q QUANNENG_COEXIST_PREPARE_OK "$RUNNER_TEMP/coexist-prepare.txt"
+            adb install -r "$RUNNER_TEMP/Quanneng-debug.apk"
+            timeout 90s adb shell am instrument -w -e phase verify app.quanneng.next.tests/app.quanneng.tests.CoexistenceSmoke | tee "$RUNNER_TEMP/coexist-verify.txt"
+            grep -q QUANNENG_COEXIST_VERIFY_OK "$RUNNER_TEMP/coexist-verify.txt"
             # Same precondition as Android CTS: test app controls after OS education.
             adb shell settings put secure immersive_mode_confirmations confirmed
             adb logcat -c
-            timeout 180s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.SecuritySmoke | tee "$RUNNER_TEMP/security-smoke.txt"
+            timeout 180s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.SecuritySmoke | tee "$RUNNER_TEMP/security-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/security-logcat.txt"
             grep -q QUANNENG_SECURITY_OK "$RUNNER_TEMP/security-smoke.txt"
-            timeout 180s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.FeatureSmoke | tee "$RUNNER_TEMP/features-smoke.txt"
+            timeout 180s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.FeatureSmoke | tee "$RUNNER_TEMP/features-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/features-logcat.txt"
             tail -n 180 "$RUNNER_TEMP/features-logcat.txt"
             grep -q QUANNENG_FEATURES_OK "$RUNNER_TEMP/features-smoke.txt"
-            timeout 120s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.ShareSmoke | tee "$RUNNER_TEMP/share-smoke.txt"
+            timeout 120s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.ShareSmoke | tee "$RUNNER_TEMP/share-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/share-logcat.txt"
             tail -n 120 "$RUNNER_TEMP/share-logcat.txt"
             grep -q QUANNENG_SHARE_OK "$RUNNER_TEMP/share-smoke.txt"
-            timeout 300s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.PlaybackSmoke | tee "$RUNNER_TEMP/playback-smoke.txt"
+            timeout 300s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.PlaybackSmoke | tee "$RUNNER_TEMP/playback-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/playback-logcat.txt"
             tail -n 180 "$RUNNER_TEMP/playback-logcat.txt"
             grep -q QUANNENG_SMOKE_OK "$RUNNER_TEMP/playback-smoke.txt"
-            timeout 120s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.BrowserSmoke | tee "$RUNNER_TEMP/browser-smoke.txt"
+            timeout 120s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.BrowserSmoke | tee "$RUNNER_TEMP/browser-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/browser-logcat.txt"
-            timeout 300s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.TransferSmoke | tee "$RUNNER_TEMP/transfer-smoke.txt"
+            timeout 300s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.TransferSmoke | tee "$RUNNER_TEMP/transfer-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/transfer-logcat.txt"
             grep -q QUANNENG_SECURITY_OK "$RUNNER_TEMP/security-smoke.txt" && grep -q QUANNENG_SMOKE_OK "$RUNNER_TEMP/playback-smoke.txt" && grep -q QUANNENG_BROWSER_OK "$RUNNER_TEMP/browser-smoke.txt" && grep -q QUANNENG_TRANSFER_OK "$RUNNER_TEMP/transfer-smoke.txt"
-            adb shell am force-stop app.quanneng
+            adb shell am force-stop app.quanneng.next
             adb shell locksettings set-pin 482947
-            timeout 150s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.SystemUnlockSmoke | tee "$RUNNER_TEMP/system-unlock-smoke.txt"
+            timeout 150s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.SystemUnlockSmoke | tee "$RUNNER_TEMP/system-unlock-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/system-unlock-logcat.txt"
             grep -q QUANNENG_SYSTEM_UNLOCK_OK "$RUNNER_TEMP/system-unlock-smoke.txt"
       - name: Save Android playback test diagnostics
@@ -112,6 +120,8 @@ jobs:
         with:
           name: Android-playback-smoke
           path: |
+            ${{ runner.temp }}/coexist-prepare.txt
+            ${{ runner.temp }}/coexist-verify.txt
             ${{ runner.temp }}/system-unlock-smoke.txt
             ${{ runner.temp }}/system-unlock-logcat.txt
             ${{ runner.temp }}/playback-smoke.txt
