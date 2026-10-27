@@ -1,4 +1,4 @@
-Quanneng uses unmodified GSYVideoPlayer exo2/base 14.0.0, GSYIjkJava 1.0.0 and AndroidX Media3 1.10.1.
+Quanneng uses unmodified GSYVideoPlayer exo2/base 14.0.0, GSYIjkJava 1.0.0 and AndroidX Media3 1.10.1 (including official datasource-okhttp, cache and database modules).
 GSY: Copyright guoshuyu, Apache-2.0, https://github.com/CarGuo/GSYVideoPlayer
 GSYIjkJava: Copyright (C) 2013-2014 Bilibili and Zhang Rui, Apache-2.0, https://github.com/CarGuo/GSYIjkJava
 Media3: Copyright The Android Open Source Project, Apache-2.0, https://github.com/androidx/media

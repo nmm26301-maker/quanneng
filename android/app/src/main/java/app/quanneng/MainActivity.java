@@ -237,15 +237,16 @@ public final class MainActivity extends PrivateActivity {
         String url=request.getString("url");if(!isHttps(url)){toast("请使用 HTTPS 视频地址");return;}
         JSONObject context=mediaContexts.get(url);
         Intent intent=new Intent(this,SystemPlayerActivity.class).setData(Uri.parse(url));
+        intent.putExtra("seriesName",request.optString("seriesName",""));
         if(context!=null){intent.putExtra("headers",context.optJSONObject("headers")==null?"{}":context.optJSONObject("headers").toString());intent.putExtra("sourcePage",context.optString("page",""));intent.putExtra("mime",context.optString("mime",""));}
         String cookie=android.webkit.CookieManager.getInstance().getCookie(url);
         if(cookie!=null)intent.putExtra("cookie",cookie);
         intent.putExtra("userAgent",web.getSettings().getUserAgentString());
         intent.putExtra("position",Math.max(0,request.optInt("position",0)));
         intent.putExtra("autoNext",request.optBoolean("autoNext",true));
-        JSONArray values=request.optJSONArray("queue");ArrayList<String> queue=new ArrayList<>();
-        if(values!=null){for(int i=0;i<Math.min(100,values.length());i++){String u=values.optString(i,"");if(isHttps(u))queue.add(u);}}
-        intent.putStringArrayListExtra("queue",queue);
+        JSONArray values=request.optJSONArray("queue"),titles=request.optJSONArray("queueTitles");ArrayList<String> queue=new ArrayList<>(),queueTitles=new ArrayList<>();
+        if(values!=null){for(int i=0;i<Math.min(100,values.length());i++){String u=values.optString(i,"");if(isHttps(u)){queue.add(u);queueTitles.add(titles==null?"":titles.optString(i,""));}}}
+        intent.putStringArrayListExtra("queue",queue).putStringArrayListExtra("queueTitles",queueTitles);
         boolean known=context!=null||java.util.regex.Pattern.compile("(?i)\\.(mp4|m3u8|mpd|webm|m4v|mov|mkv)(?:[?#]|$)").matcher(url).find();
         if(known){startActivityForResult(intent,NATIVE_PLAYER);return;}
         final long token=++mediaRequest;

@@ -10,7 +10,7 @@ public final class FixtureProvider extends ContentProvider {
     @Override public boolean onCreate(){return true;}
     @Override public String getType(Uri uri){return "video/mp4";}
     @Override public ParcelFileDescriptor openFile(Uri uri,String mode)throws FileNotFoundException{
-        if(!("/flower.mp4".equals(uri.getPath())||"/seek-fixture.mp4".equals(uri.getPath()))||!"r".equals(mode))throw new FileNotFoundException();
+        if(!("/flower.mp4".equals(uri.getPath())||"/seek-fixture.mp4".equals(uri.getPath())||"/buffer-fixture.mp4".equals(uri.getPath()))||!"r".equals(mode))throw new FileNotFoundException();
         String name=uri.getLastPathSegment();File file=new File(getContext().getCacheDir(),"fixture-"+name);
         try{if(!file.exists())try(InputStream input=getContext().getAssets().open(name);OutputStream output=new FileOutputStream(file)){byte[] block=new byte[8192];int n;while((n=input.read(block))!=-1)output.write(block,0,n);}}catch(IOException e){throw new FileNotFoundException(e.getMessage());}
         return ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY);

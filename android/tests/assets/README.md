@@ -10,3 +10,5 @@ The instrumentation build downloads the public MDN CC0 flower video from https:/
 ```sh
 ffmpeg -f lavfi -i color=c=0x13221b:s=160x90:r=1 -t 1300 -c:v libx264 -pix_fmt yuv420p -g 1 -movflags +faststart seek-fixture.mp4
 ```
+
+`buffer-fixture.mp4` is an original synthetic FFmpeg testsrc2, 18 seconds, 160×90 at 15 fps, AVC/yuv420p, fast-start MP4, 80 kbit/s target; no external footage/audio. Used only in the instrumentation APK for deterministic throttled, interrupted and offline cache decoding. Generation: `ffmpeg -f lavfi -i testsrc2=size=160x90:rate=15 -t 18 -c:v libx264 -preset veryfast -b:v 80k -maxrate 100k -bufsize 160k -pix_fmt yuv420p -movflags +faststart buffer-fixture.mp4`.

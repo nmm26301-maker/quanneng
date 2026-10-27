@@ -30,8 +30,10 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private ScrollView detailScroll;
     private FrameLayout videoFrame;
     private TextView title,overlayTitle,overlayClock,position,total,pointALabel,pointBLabel,jumpFeedback;
+    private TextView streamingStatus;
     private long clockUpdatedAt;
     private AlertDialog jumpDialog;
+    private AlertDialog episodeDialog;
     private Button loopButton,speedButton,jumpSettings;
     private int[] jumpValues=JumpSteps.DEFAULTS.clone();
     private ImageButton playButton,fullButton,screenLockButton,unlockTouchButton;
@@ -51,6 +53,11 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private boolean initialSeek,restoringVault;
     private final java.util.concurrent.ExecutorService vaultIo=java.util.concurrent.Executors.newSingleThreadExecutor();
     private ArrayList<String> queue;
+    private final Map<String,String> episodeNames=new HashMap<>();
+    private TextView episodeStatus;
+    private Button previousEpisode,nextEpisode;
+    private Button episodeButton;
+    private LinearLayout episodeCard;
     private final ArrayList<Button> jumpButtons=new ArrayList<>();
     private int jumpTarget=-1,feedbackEpoch=0;
     private long lastJumpAt=0;
@@ -62,14 +69,14 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private final Runnable tick=new Runnable(){public void run(){
         if(ready){if(SystemClock.uptimeMillis()-savedAt>3000){rememberPosition();savedAt=SystemClock.uptimeMillis();}int now=video.getCurrentPosition();if(looping&&now>=pointB){seekExact((int)pointA);now=(int)pointA;}
             if(!scrubbing){position.setText(time(now));progress.setProgress(now/1000);}
-            total.setText(time(video.getDuration()));progress.setSecondaryProgress((int)((long)progress.getMax()*video.getBufferPercentage()/100));updatePlay();
+            total.setText(time(video.getDuration()));progress.setSecondaryProgress((int)((long)progress.getMax()*video.getBufferPercentage()/100));loading.setVisibility(video.isBuffering()&&!touchLocked?View.VISIBLE:View.GONE);if(streamingStatus!=null)streamingStatus.setText(video.streamingStatus());updatePlay();
         }
         updateOverlayClock();handler.postDelayed(this,100);
     }};
     @Override public void onCreate(Bundle state){
         super.onCreate(state);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         jumpValues=JumpSteps.load(this);buildPlayer();configureMedia();if(Build.VERSION.SDK_INT>=33){backCallback=()->{if(touchLocked){lockedHint();return;}if(fullscreen)setFullscreen(false);else finish();};getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,backCallback);}
-        queue=getIntent().getStringArrayListExtra("queue");current=getIntent().getData();if(current==null){finish();return;}whenUnlocked(()->{if(!restoreVault())load(current,true);});
+        current=getIntent().getData();if(current==null){finish();return;}prepareEpisodes();whenUnlocked(()->{if(!restoreVault())load(current,true);});
     }
     private void buildPlayer(){
         root=new LinearLayout(this);root.setOrientation(1);root.setBackgroundColor(PlayerUi.BG);setContentView(root);
@@ -106,12 +113,15 @@ public final class SystemPlayerActivity extends PrivateActivity {
         screenLockButton=PlayerUi.icon(this,"lock","防误触锁定（进入全屏）",false);screenLockButton.setId(1310);screenLockButton.setEnabled(false);buttons.addView(screenLockButton,new LinearLayout.LayoutParams(dp(48),dp(48)));screenLockButton.setOnClickListener(v->{if(ready){if(!fullscreen)setFullscreen(true);setTouchLocked(true);}});
         buttons.addView(fullscreenJumps,new LinearLayout.LayoutParams(0,dp(56),1));controlSpace=new View(this);buttons.addView(controlSpace,new LinearLayout.LayoutParams(0,1,1));
         jumpSettings=PlayerUi.chip(this,"步长");jumpSettings.setId(1251);jumpSettings.setContentDescription("设置四个跳转时间");buttons.addView(jumpSettings,new LinearLayout.LayoutParams(dp(56),dp(48)));jumpSettings.setOnClickListener(v->chooseJumpSteps());
+        episodeButton=PlayerUi.chip(this,"选集");episodeButton.setId(1810);episodeButton.setContentDescription("打开选集列表");episodeButton.setVisibility(View.GONE);buttons.addView(episodeButton,new LinearLayout.LayoutParams(dp(56),dp(48)));episodeButton.setOnClickListener(v->chooseEpisode());
         speedButton=PlayerUi.chip(this,"1.0×");buttons.addView(speedButton,new LinearLayout.LayoutParams(dp(56),dp(48)));speedButton.setContentDescription("选择播放速度");speedButton.setOnClickListener(v->chooseSpeed());
         fullButton=PlayerUi.icon(this,"fullscreen","进入全屏",false);fullButton.setId(1005);LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(dp(48),dp(48));fp.leftMargin=dp(4);buttons.addView(fullButton,fp);fullButton.setOnClickListener(v->setFullscreen(!fullscreen));
     }
     private void buildDetails(){
         detailScroll=new ScrollView(this);detailScroll.setId(1008);detailScroll.setFillViewport(false);root.addView(detailScroll,new LinearLayout.LayoutParams(-1,0,1));
         details=new LinearLayout(this);details.setOrientation(1);details.setPadding(dp(16),dp(20),dp(16),dp(24));detailScroll.addView(details);
+        LinearLayout episodes=card("剧集","仅显示当前这一部剧的集数");episodeCard=episodes;episodeCard.setId(1824);episodeCard.setVisibility(View.GONE);episodeStatus=PlayerUi.text(this,"",13,PlayerUi.MUTED);episodeStatus.setId(1820);episodes.addView(episodeStatus);LinearLayout episodeActions=row(episodes);previousEpisode=PlayerUi.chip(this,"上一集");previousEpisode.setId(1821);addWeighted(episodeActions,previousEpisode,48);previousEpisode.setOnClickListener(v->switchEpisode(queue.indexOf(current.toString())-1,false));Button select=PlayerUi.chip(this,"选集列表");select.setId(1822);addWeighted(episodeActions,select,48);select.setOnClickListener(v->chooseEpisode());nextEpisode=PlayerUi.chip(this,"下一集");nextEpisode.setId(1823);addWeighted(episodeActions,nextEpisode,48);nextEpisode.setOnClickListener(v->switchEpisode(queue.indexOf(current.toString())+1,false));
+        LinearLayout streaming=card("流畅播放","提前缓冲、自动清晰度与本机缓存");streamingStatus=PlayerUi.text(this,"连接中…",13,PlayerUi.MUTED);streamingStatus.setId(1800);streamingStatus.setLineSpacing(dp(4),1);streaming.addView(streamingStatus);Button optimize=PlayerUi.chip(this,"播放优化与缓存");optimize.setId(1801);streaming.addView(optimize,new LinearLayout.LayoutParams(-1,dp(48)));optimize.setOnClickListener(v->chooseStreaming());
         LinearLayout precise=card("精准跳转","按你的节奏，回看每一刻");
         TextView heading=(TextView)precise.getChildAt(0);precise.removeView(heading);LinearLayout headingRow=new LinearLayout(this);headingRow.setGravity(Gravity.CENTER_VERTICAL);headingRow.addView(heading,new LinearLayout.LayoutParams(0,dp(48),1));Button settings=PlayerUi.chip(this,"设置时间");settings.setId(1151);settings.setOnClickListener(v->chooseJumpSteps());headingRow.addView(settings,new LinearLayout.LayoutParams(dp(96),dp(48)));precise.addView(headingRow,0);
         for(int row=0;row<2;row++){LinearLayout skips=row(precise);for(int column=0;column<2;column++){int index=row*2+column;addWeighted(skips,makeJumpButton(index,false,1100+index),64);}}
@@ -200,7 +210,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void seekExact(int value){jumpTarget=-1;try{if(media!=null)media.seekTo((long)value);else video.seekTo(value);}catch(IllegalStateException error){toast("视频尚未准备好，请稍后重试");}}
     private void clearLoop(){looping=false;updatePoints();}
     private void load(Uri uri,boolean initial){
-        rememberPosition();++mediaEpoch;activeSubtitle=PlaybackHistory.subtitle(this,uri.toString());subtitleStamp="";current=uri;initialSeek=false;selectedSpeed=1f;ready=false;failed=false;media=null;jumpTarget=-1;setJumpsEnabled(false);pointA=pointB=0;clearLoop();title.setText(displayName(uri));title.setContentDescription(displayName(uri));overlayTitle.setText(displayName(uri));position.setText("连接中…");loading.setVisibility(View.VISIBLE);playButton.setEnabled(false);screenLockButton.setEnabled(false);progress.setEnabled(false);progress.setProgress(0);speedButton.setText("1.0×");
+        rememberPosition();++mediaEpoch;activeSubtitle=PlaybackHistory.subtitle(this,uri.toString());subtitleStamp="";current=uri;updateEpisodes();initialSeek=false;selectedSpeed=1f;ready=false;failed=false;media=null;jumpTarget=-1;setJumpsEnabled(false);pointA=pointB=0;clearLoop();String mediaName=episodeNames.containsKey(uri.toString())?episodeNames.get(uri.toString()):displayName(uri);title.setText(mediaName);title.setContentDescription(mediaName);overlayTitle.setText(mediaName);position.setText("连接中…");loading.setVisibility(View.VISIBLE);playButton.setEnabled(false);screenLockButton.setEnabled(false);progress.setEnabled(false);progress.setProgress(0);speedButton.setText("1.0×");
         HashMap<String,String> headers=new HashMap<>();
         if(initial){try{JSONObject data=new JSONObject(getIntent().getStringExtra("headers")==null?"{}":getIntent().getStringExtra("headers"));Iterator<String> keys=data.keys();while(keys.hasNext()){String k=keys.next();headers.put(k,data.getString(k));}}catch(JSONException ignored){}
             String cookie=getIntent().getStringExtra("cookie");if(cookie!=null)headers.put("Cookie",cookie);
@@ -227,10 +237,43 @@ public final class SystemPlayerActivity extends PrivateActivity {
         dialog.show();
     }
     private void next(){
-        if(getIntent().getBooleanExtra("autoNext",true)&&queue!=null){int index=queue.indexOf(current.toString());if(index>=0&&index+1<queue.size()){getIntent().putExtra("position",0);load(Uri.parse(queue.get(index+1)),false);return;}}
+        if(getIntent().getBooleanExtra("autoNext",true)&&queue!=null){int index=queue.indexOf(current.toString());if(index>=0&&index+1<queue.size()){switchEpisode(index+1,true);return;}}
         updatePlay();
     }
-    private void chooseSpeed(){if(!ready||media==null)return;String[] labels={"0.5 倍速","0.75 倍速","1.0 倍速","1.25 倍速","1.5 倍速","2.0 倍速","3.0 倍速"};float[] values={.5f,.75f,1f,1.25f,1.5f,2f,3f};new PrivateDialogBuilder(this).setTitle("播放速度").setItems(labels,(d,i)->{try{boolean wasPlaying=video.isPlaying();media.setSpeed(values[i],1f);selectedSpeed=values[i];if(!wasPlaying)video.pause();speedButton.setText(values[i]+"×");setChrome(true);}catch(RuntimeException e){toast("此格式不支持所选速度");}}).show();}
+    private void prepareEpisodes(){
+        ArrayList<String> incoming=getIntent().getStringArrayListExtra("queue"),names=getIntent().getStringArrayListExtra("queueTitles");queue=new ArrayList<>();
+        if(incoming!=null)for(int i=0;i<Math.min(100,incoming.size());i++){
+            String value=incoming.get(i);if(value==null||value.length()>8192||queue.contains(value))continue;Uri uri=Uri.parse(value);boolean allowed="content".equals(uri.getScheme())||MainActivity.isHttps(value);
+            if(!allowed&&"http".equals(uri.getScheme()))try{NetworkPolicy.url(value);allowed=true;}catch(Exception ignored){}
+            if(!allowed)continue;
+            if(getIntent().hasExtra("nasAuth"))try{if(!NetworkPolicy.sameOrigin(NetworkPolicy.url(current.toString()),NetworkPolicy.url(value)))continue;}catch(Exception e){continue;}
+            queue.add(value);if(names!=null&&i<names.size()&&names.get(i)!=null&&!names.get(i).trim().isEmpty())episodeNames.put(value,names.get(i).substring(0,Math.min(160,names.get(i).length())));
+        }
+        if(!queue.contains(current.toString()))queue.add(0,current.toString());
+        if(!getIntent().hasExtra("autoNext"))getIntent().putExtra("autoNext",getSharedPreferences("episodes",0).getBoolean("autoNext",true));updateEpisodes();
+    }
+    private void updateEpisodes(){if(queue==null||current==null||episodeStatus==null)return;boolean multiple=queue.size()>1;episodeButton.setVisibility(multiple?View.VISIBLE:View.GONE);episodeCard.setVisibility(multiple?View.VISIBLE:View.GONE);String name=getIntent().getStringExtra("seriesName");if(name!=null&&!name.trim().isEmpty())((TextView)episodeCard.getChildAt(0)).setText(name.substring(0,Math.min(80,name.length())));int index=queue.indexOf(current.toString());episodeStatus.setText("第 "+(index+1)+" / "+queue.size()+" 集 · 连播"+(getIntent().getBooleanExtra("autoNext",true)?"开启":"关闭"));previousEpisode.setEnabled(index>0);nextEpisode.setEnabled(index>=0&&index+1<queue.size());}
+    private void switchEpisode(int index,boolean automatic){
+        if(queue==null||index<0||index>=queue.size()){toast("已到播放列表边界");return;}if(queue.get(index).equals(current.toString())&&!automatic)return;
+        if(automatic)getIntent().putExtra("position",0);else getIntent().removeExtra("position");
+        getIntent().setData(Uri.parse(queue.get(index)));load(Uri.parse(queue.get(index)),false);setChrome(true);
+    }
+    private void chooseEpisode(){
+        if(queue==null||queue.size()<2)return;String[] labels=new String[queue.size()];int selected=queue.indexOf(current.toString());
+        for(int i=0;i<queue.size();i++)labels[i]="第 "+(i+1)+" 集 · "+(episodeNames.containsKey(queue.get(i))?episodeNames.get(queue.get(i)):displayName(Uri.parse(queue.get(i))));
+        AlertDialog dialog=new PrivateDialogBuilder(this).setTitle("选集（"+(selected+1)+" / "+queue.size()+"）").setSingleChoiceItems(labels,selected,(d,i)->{d.dismiss();switchEpisode(i,false);})
+            .setPositiveButton("下一集",(d,w)->switchEpisode(selected+1,false)).setNegativeButton("上一集",(d,w)->switchEpisode(selected-1,false)).setNeutralButton("连播："+(getIntent().getBooleanExtra("autoNext",true)?"开":"关"),(d,w)->{boolean enabled=!getIntent().getBooleanExtra("autoNext",true);getIntent().putExtra("autoNext",enabled);getSharedPreferences("episodes",0).edit().putBoolean("autoNext",enabled).apply();updateEpisodes();}).create();
+        episodeDialog=dialog;dialog.setOnShowListener(d->{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(selected+1<queue.size());dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(selected>0);});dialog.show();
+    }
+    private void chooseSpeed(){if(!ready||media==null)return;String[] labels={"0.5 倍速","0.75 倍速","1.0 倍速","1.25 倍速","1.5 倍速","2.0 倍速","3.0 倍速","播放优化与缓存…"};float[] values={.5f,.75f,1f,1.25f,1.5f,2f,3f};new PrivateDialogBuilder(this).setTitle("播放速度").setItems(labels,(d,i)->{if(i==values.length){chooseStreaming();return;}try{boolean wasPlaying=video.isPlaying();media.setSpeed(values[i],1f);selectedSpeed=values[i];if(!wasPlaying)video.pause();speedButton.setText(values[i]+"×");setChrome(true);}catch(RuntimeException e){toast("此格式不支持所选速度");}}).show();}
+    private void chooseStreaming(){
+        String[] choices={"策略："+PlaybackPipeline.PROFILES[PlaybackPipeline.profile(this)],"边播边缓存："+(PlaybackPipeline.cacheSelected(this)?"开启":"关闭"),"清理视频缓存（已用 "+PlaybackPipeline.cacheBytes()/1024/1024+" MB）"};
+        new PrivateDialogBuilder(this).setTitle("播放优化与缓存").setItems(choices,(d,i)->{
+            if(i==0)new PrivateDialogBuilder(this).setTitle("新策略在下次打开视频时生效").setSingleChoiceItems(PlaybackPipeline.PROFILES,PlaybackPipeline.profile(this),(choice,p)->{PlaybackPipeline.profile(this,p);choice.dismiss();toast("播放策略已保存，下次打开视频生效");}).setNegativeButton("取消",null).show();
+            else if(i==1){PlaybackPipeline.cacheSelected(this,!PlaybackPipeline.cacheSelected(this));toast("缓存设置已保存，下次打开视频生效");}
+            else vaultIo.execute(()->{try{PlaybackPipeline.clearCache(this);runOnUiThread(()->whenUnlocked(()->toast("视频缓存已清理")));}catch(java.io.IOException e){runOnUiThread(()->whenUnlocked(()->toast("缓存正忙，请稍后重试")));}});
+        }).setPositiveButton("完成",null).setNeutralButton("功能说明",(d,w)->new PrivateDialogBuilder(this).setTitle("缓冲与缓存").setMessage("默认流畅优先，尽量提前缓冲至 120 秒，受网速、视频码率与内存上限影响。\n自动清晰度需要视频源提供多档画质，普通 MP4 无法凭空降码率。\n公共 HTTPS 视频边播边缓存，最多 512 MB，自动清理旧片段；系统也可能回收缓存。登录来源、NAS、本地和保险箱视频不写入此缓存。\n直播清单每次从源站刷新，缓存不等于完整下载。弱网自动重试，失效地址仍需重新获取。").setPositiveButton("知道了",null).show()).show();
+    }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);whenUnlocked(()->handleSubtitleResult(request,result,data));
     }

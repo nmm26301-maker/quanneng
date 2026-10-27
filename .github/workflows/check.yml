@@ -55,6 +55,7 @@ jobs:
 
       - name: Download public playback fixture and build instrumentation APK
         run: |
+          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=160x90:rate=15 -t 18 -c:v libx264 -preset veryfast -b:v 80k -maxrate 100k -bufsize 160k -pix_fmt yuv420p -movflags +faststart -y android/tests/assets/buffer-fixture.mp4
           curl --fail --location --retry 3 https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4 -o android/tests/assets/flower.mp4
           python3 android/tools/build-tests.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-tests.apk"
           python3 -c "import sys, os; sys.path.insert(0, 'android/tools'); from signing import prepare_signing; prepare_signing(os.environ['RUNNER_TEMP'] + '/legacy-fixture.p12', development=True)"
@@ -100,6 +101,12 @@ jobs:
             adb logcat -d -v brief > "$RUNNER_TEMP/share-logcat.txt"
             tail -n 120 "$RUNNER_TEMP/share-logcat.txt"
             grep -q QUANNENG_SHARE_OK "$RUNNER_TEMP/share-smoke.txt"
+            timeout 180s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.StreamingSmoke | tee "$RUNNER_TEMP/streaming-smoke.txt"
+            adb logcat -d -v brief > "$RUNNER_TEMP/streaming-logcat.txt"
+            grep -q QUANNENG_STREAMING_OK "$RUNNER_TEMP/streaming-smoke.txt"
+            timeout 120s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.EpisodeSmoke | tee "$RUNNER_TEMP/episodes-smoke.txt"
+            adb logcat -d -v brief > "$RUNNER_TEMP/episodes-logcat.txt"
+            grep -q QUANNENG_EPISODES_OK "$RUNNER_TEMP/episodes-smoke.txt"
             timeout 300s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.PlaybackSmoke | tee "$RUNNER_TEMP/playback-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/playback-logcat.txt"
             tail -n 180 "$RUNNER_TEMP/playback-logcat.txt"
@@ -124,6 +131,10 @@ jobs:
             ${{ runner.temp }}/coexist-verify.txt
             ${{ runner.temp }}/system-unlock-smoke.txt
             ${{ runner.temp }}/system-unlock-logcat.txt
+            ${{ runner.temp }}/episodes-smoke.txt
+            ${{ runner.temp }}/episodes-logcat.txt
+            ${{ runner.temp }}/streaming-smoke.txt
+            ${{ runner.temp }}/streaming-logcat.txt
             ${{ runner.temp }}/playback-smoke.txt
             ${{ runner.temp }}/playback-logcat.txt
             ${{ runner.temp }}/browser-smoke.txt
