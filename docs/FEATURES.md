@@ -114,4 +114,12 @@
 
 用户已选择保留旧版并安装可并存的新版本。应用 ID 改为 `app.quanneng.next`，原生 Java namespace 仍为 `app.quanneng`；Manifest 组件名完全限定，AAPT2 显式生成原 namespace 的 R 类，媒体 provider authority 改为 `app.quanneng.next.media`，避免与旧版冲突。旧版保险箱、记录、下载与 Android Keystore 数据继续在旧版，不能自动迁移。
 
-使用独立 RSA-3072 正式签名，公开指纹见 [安装与恢复说明](INSTALLATION.md)。发布包从恢复备份解压出的同一把私钥构建，并在编译前匹配固定证书；不使用 CI 临时签名交付。新增真实 Android 并存 / 原地重装测试，旧身份夹具使用另一把签名和旧 provider，检查两版独立 UID、旧夹具加密数据保留，以及新版私有设置和 Keystore 密钥保留。测试结果在 CI 完成后另行记录。
+使用独立 RSA-3072 正式签名，公开指纹见 [安装与恢复说明](INSTALLATION.md)。发布包从恢复备份解压出的同一把私钥构建，并在编译前匹配固定证书；不使用 CI 临时签名交付。新增真实 Android 并存 / 原地重装测试，旧身份夹具使用另一把签名和旧 provider，检查两版独立 UID、旧夹具加密数据保留，以及新版私有设置和 Keystore 密钥保留。完整通过的 CI 与正式交付记录见下方。
+
+### v0.4.0 最终验证与交付
+
+- 源码 `6257ab9884f568bfa65f107613c5f3434c94adf5` 的 [GitHub Actions 40520325047](https://github.com/nmm26301-maker/quanneng/actions/runs/40520325047) 完整通过。前端 12 项、签名保护 4 项、主机请求策略检查、Android 并存 prepare/verify 两阶段及原有七组回归均通过。
+- Android 中安装了另一签名的旧身份夹具及旧媒体 provider，同时安装新版成功；原地重装新版后，两版 UID 不变、旧夹具加密标记保留、新版私有设置和 Android Keystore 加密密钥仍可解密。测试使用夹具，不代表访问过用户手机上的旧数据。
+- 正式手机 APK 为 arm64-v8a、versionCode 12 / versionName 0.4.0、包名 `app.quanneng.next`、标签“全能新版”，通过 APK v2/v3 签名校验。正式签名证书 SHA-256 为 `bf6f9d9599d42993eb0160efd5d71a070f75d0d5ffc0c0a87bf8bb04d8c8e182`，与恢复备份中的密钥一致；不是 CI 临时签名包。
+- 正式安装包 `QuannengNext-v0.4.0.apk` 的 SHA-256：`79165d61687e5c6e2ae18c24f1fab0c8d92338f360a36ae971396ebd5436acb1`。发布 APK 实际由备份解压后的密钥构建，恢复文件已经逐字节核对，并持久保存了独立私密签名备份。
+- 原 v0.3.x 的安装和数据继续留在旧版，本次交付是用户已同意的独立并存方案。旧版私有记录和保险箱不会自动搬入新版。真实手机指纹、电视和 NAS 设备仍需实机验收。
