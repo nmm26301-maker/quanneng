@@ -35,7 +35,10 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private int[] jumpValues=JumpSteps.DEFAULTS.clone();
     private ImageButton playButton,fullButton;
     private ProgressBar loading;
-    private SeekBar progress;
+    private PrecisionSeekBar progress;
+    private LinearLayout controlButtons;
+    private View controlSpace;
+    private int safeLeft,safeRight,safeBottom,safeTop;
     private IjkExo2MediaPlayer media;
     private Uri current;
     private float selectedSpeed=1f;
@@ -54,8 +57,8 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private final Runnable hideJump=()->{final int epoch=feedbackEpoch;jumpFeedback.animate().cancel();if(PlayerUi.motionEnabled())jumpFeedback.animate().alpha(0).translationY(-dp(4)).setDuration(180).withEndAction(()->{if(epoch==feedbackEpoch)jumpFeedback.setVisibility(View.GONE);}).start();else jumpFeedback.setVisibility(View.GONE);};
     private final Runnable tick=new Runnable(){public void run(){
         if(ready){if(SystemClock.uptimeMillis()-savedAt>3000){rememberPosition();savedAt=SystemClock.uptimeMillis();}int now=video.getCurrentPosition();if(looping&&now>=pointB){seekExact((int)pointA);now=(int)pointA;}
-            if(!scrubbing){position.setText(time(now));progress.setProgress(video.getDuration()>0?(int)(1000L*now/video.getDuration()):0);}
-            total.setText(time(video.getDuration()));progress.setSecondaryProgress(video.getBufferPercentage()*10);updatePlay();
+            if(!scrubbing){position.setText(time(now));progress.setProgress(now/1000);}
+            total.setText(time(video.getDuration()));progress.setSecondaryProgress((int)((long)progress.getMax()*video.getBufferPercentage()/100));updatePlay();
         }
         handler.postDelayed(this,100);
     }};
@@ -78,19 +81,22 @@ public final class SystemPlayerActivity extends PrivateActivity {
         buildControls();buildDetails();buildOverlayHeader();
         jumpFeedback=PlayerUi.text(this,"",14,PlayerUi.TEXT);jumpFeedback.setId(1300);jumpFeedback.setGravity(Gravity.CENTER);jumpFeedback.setPadding(dp(18),dp(12),dp(18),dp(12));jumpFeedback.setBackground(PlayerUi.surface(this,0xEF14251E,16));jumpFeedback.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);jumpFeedback.setVisibility(View.GONE);videoFrame.addView(jumpFeedback,new FrameLayout.LayoutParams(-2,-2,Gravity.CENTER));
         root.post(this::sizePlayer);root.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol||b-t!=ob-ot)sizePlayer();});
-        root.setOnApplyWindowInsetsListener((view,insets)->{if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(fullscreen?WindowInsets.Type.displayCutout():WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());view.setPadding(bars.left,bars.top,bars.right,bars.bottom);}return insets;});
+        root.setOnApplyWindowInsetsListener((view,insets)->{
+            if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());android.graphics.Insets stable=insets.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()|WindowInsets.Type.displayCutout());android.graphics.Insets gestures=insets.getInsets(WindowInsets.Type.systemGestures());safeLeft=Math.max(stable.left,gestures.left);safeRight=Math.max(stable.right,gestures.right);safeBottom=Math.max(stable.bottom,gestures.bottom);safeTop=stable.top;view.setPadding(fullscreen?0:bars.left,fullscreen?0:bars.top,fullscreen?0:bars.right,fullscreen?0:bars.bottom);}
+            else{safeLeft=insets.getStableInsetLeft();safeRight=insets.getStableInsetRight();safeBottom=insets.getStableInsetBottom();safeTop=insets.getStableInsetTop();}
+            sizePlayer();return insets;});
         if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
     }
     private void buildControls(){
         controls=new LinearLayout(this);controls.setId(1006);controls.setOrientation(1);controls.setPadding(dp(12),dp(4),dp(12),dp(8));
         FrameLayout.LayoutParams cp=new FrameLayout.LayoutParams(-1,dp(136),Gravity.BOTTOM);videoFrame.addView(controls,cp);
         LinearLayout times=row(controls);position=PlayerUi.text(this,"00:00:00",12,PlayerUi.TEXT);position.setTypeface(Typeface.MONOSPACE);times.addView(position,new LinearLayout.LayoutParams(0,dp(20),1));total=PlayerUi.text(this,"00:00:00",12,PlayerUi.MUTED);total.setTypeface(Typeface.MONOSPACE);times.addView(total);
-        progress=new SeekBar(this);progress.setId(1007);progress.setMax(1000);progress.setContentDescription("视频进度");progress.setProgressTintList(ColorStateList.valueOf(PlayerUi.ACCENT));progress.setThumbTintList(ColorStateList.valueOf(PlayerUi.ACCENT));progress.setSecondaryProgressTintList(ColorStateList.valueOf(PlayerUi.BORDER));progress.setPadding(dp(8),0,dp(8),0);controls.addView(progress,new LinearLayout.LayoutParams(-1,dp(48)));
-        progress.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar s){scrubbing=true;handler.removeCallbacks(hideControls);}public void onProgressChanged(SeekBar s,int p,boolean user){if(user&&ready)position.setText(time((long)p*video.getDuration()/1000));}public void onStopTrackingTouch(SeekBar s){if(ready){clearLoop();seekExact((int)((long)s.getProgress()*video.getDuration()/1000));}scrubbing=false;scheduleHide();}});
-        fullscreenJumps=new LinearLayout(this);fullscreenJumps.setId(1250);controls.addView(fullscreenJumps,new LinearLayout.LayoutParams(-1,dp(56)));for(int index=0;index<4;index++){Button b=makeJumpButton(index,true,1200+index);addWeighted(fullscreenJumps,b,48);}fullscreenJumps.setVisibility(View.GONE);
-        LinearLayout buttons=row(controls);buttons.setGravity(Gravity.CENTER_VERTICAL);
+        progress=new PrecisionSeekBar(this);progress.setId(1007);progress.setMax(1);progress.setContentDescription("视频进度，左右拖动按秒定位，上移慢调");progress.setProgressTintList(ColorStateList.valueOf(PlayerUi.ACCENT));progress.setThumbTintList(ColorStateList.valueOf(PlayerUi.ACCENT));progress.setSecondaryProgressTintList(ColorStateList.valueOf(PlayerUi.BORDER));progress.setPadding(dp(8),0,dp(8),0);controls.addView(progress,new LinearLayout.LayoutParams(-1,dp(48)));
+        progress.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar s){scrubbing=true;handler.removeCallbacks(hideControls);}public void onProgressChanged(SeekBar s,int p,boolean user){if(user&&ready){if(!scrubbing){clearLoop();seekExact((int)Math.min(video.getDuration(),p*1000L));}position.setText(time(p*1000L));showJumpFeedback("松手定位 · "+time(p*1000L)+(progress.fine()?" · 精细 1 秒":" · 按秒拖动"));}}public void onStopTrackingTouch(SeekBar s){if(ready&&!progress.cancelled()){clearLoop();seekExact((int)Math.min(video.getDuration(),s.getProgress()*1000L));}scrubbing=false;scheduleHide();}});
+        fullscreenJumps=new LinearLayout(this);fullscreenJumps.setId(1250);for(int index=0;index<4;index++){Button b=makeJumpButton(index,true,1200+index);addWeighted(fullscreenJumps,b,48);}fullscreenJumps.setVisibility(View.GONE);
+        LinearLayout buttons=row(controls);controlButtons=buttons;buttons.setGravity(Gravity.CENTER_VERTICAL);
         playButton=PlayerUi.icon(this,"play","播放",true);playButton.setId(1004);LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(dp(56),dp(56));pp.setMargins(dp(4),0,dp(4),0);buttons.addView(playButton,pp);playButton.setOnClickListener(v->togglePlay());
-        View space=new View(this);buttons.addView(space,new LinearLayout.LayoutParams(0,1,1));
+        buttons.addView(fullscreenJumps,new LinearLayout.LayoutParams(0,dp(56),1));controlSpace=new View(this);buttons.addView(controlSpace,new LinearLayout.LayoutParams(0,1,1));
         jumpSettings=PlayerUi.chip(this,"步长");jumpSettings.setId(1251);jumpSettings.setContentDescription("设置四个跳转时间");buttons.addView(jumpSettings,new LinearLayout.LayoutParams(dp(56),dp(48)));jumpSettings.setOnClickListener(v->chooseJumpSteps());
         speedButton=PlayerUi.chip(this,"1.0×");buttons.addView(speedButton,new LinearLayout.LayoutParams(dp(56),dp(48)));speedButton.setContentDescription("选择播放速度");speedButton.setOnClickListener(v->chooseSpeed());
         fullButton=PlayerUi.icon(this,"fullscreen","进入全屏",false);fullButton.setId(1005);LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(dp(48),dp(48));fp.leftMargin=dp(4);buttons.addView(fullButton,fp);fullButton.setOnClickListener(v->setFullscreen(!fullscreen));
@@ -111,14 +117,14 @@ public final class SystemPlayerActivity extends PrivateActivity {
         LinearLayout features=card("播放工具","字幕、投屏与接力都在这里");
         Button center=PlayerUi.chip(this,"字幕中心 / 调整偏移与字号");features.addView(center,new LinearLayout.LayoutParams(-1,dp(52)));center.setOnClickListener(v->startActivityForResult(new Intent(this,SubtitleActivity.class).putExtra("pick",true),45));
         for(String kind:new String[]{"cast","handoff","diagnostics","gestures"}){Button actionButton=PlayerUi.chip(this,"cast".equals(kind)?"电视投屏":"handoff".equals(kind)?"分享接力":"diagnostics".equals(kind)?"播放诊断":"手势设置");features.addView(actionButton,new LinearLayout.LayoutParams(-1,dp(52)));actionButton.setOnClickListener(v->{if("handoff".equals(kind)){HandoffActivity.share(this,current.toString(),video.getCurrentPosition());return;}Class<?> screen="cast".equals(kind)?CastActivity.class:"diagnostics".equals(kind)?DiagnosticsActivity.class:GestureSettingsActivity.class;startActivity(new Intent(this,screen).putExtra("url",current.toString()));});}
-        TextView hint=PlayerUi.text(this,"全屏观看时，轻点画面唤出控制。返回键先退出全屏。",12,PlayerUi.MUTED);hint.setLineSpacing(dp(4),1);hint.setPadding(dp(4),dp(16),dp(4),0);details.addView(hint);
+        TextView hint=PlayerUi.text(this,"全屏轻点显示透明控制。进度条左右拖动按秒定位，上移慢调，松手生效；点按轨道可快速跳转。返回键先退出全屏。",12,PlayerUi.MUTED);hint.setLineSpacing(dp(4),1);hint.setPadding(dp(4),dp(16),dp(4),0);details.addView(hint);
     }
     private LinearLayout card(String heading,String subtitle){LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(dp(16),dp(16),dp(16),dp(16));GradientDrawable bg=PlayerUi.surface(this,PlayerUi.SURFACE,20);bg.setStroke(dp(1),PlayerUi.BORDER);card.setBackground(bg);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(16);details.addView(card,p);TextView h=PlayerUi.text(this,heading,17,PlayerUi.TEXT);h.setTypeface(null,Typeface.BOLD);card.addView(h);TextView sub=PlayerUi.text(this,subtitle,12,PlayerUi.MUTED);sub.setPadding(0,dp(6),0,dp(12));card.addView(sub);return card;}
     private LinearLayout row(LinearLayout parent){LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);parent.addView(row,new LinearLayout.LayoutParams(-1,-2));return row;}
     private void addWeighted(LinearLayout row,View view,int height){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(height),1);p.setMargins(dp(4),dp(4),dp(4),dp(4));row.addView(view,p);}
     private void buildOverlayHeader(){overlayHeader=new LinearLayout(this);overlayHeader.setGravity(Gravity.CENTER_VERTICAL);overlayHeader.setPadding(dp(12),dp(4),dp(16),dp(4));overlayHeader.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xD9000000,0x00000000}));videoFrame.addView(overlayHeader,new FrameLayout.LayoutParams(-1,dp(64),Gravity.TOP));ImageButton back=PlayerUi.icon(this,"back","退出全屏",false);back.setId(1009);overlayHeader.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));back.setOnClickListener(v->setFullscreen(false));overlayTitle=PlayerUi.text(this,"",14,PlayerUi.TEXT);overlayTitle.setSingleLine();overlayTitle.setEllipsize(TextUtils.TruncateAt.END);overlayHeader.addView(overlayTitle,new LinearLayout.LayoutParams(0,-2,1));overlayHeader.setVisibility(View.GONE);}
     private void configureMedia(){
-        video.setOnPreparedListener(mp->{media=(IjkExo2MediaPlayer)mp;ready=true;failed=false;loading.setVisibility(View.GONE);progress.setEnabled(video.getDuration()>0);setJumpsEnabled(video.getDuration()>0);playButton.setEnabled(true);handler.removeCallbacks(tick);handler.post(tick);
+        video.setOnPreparedListener(mp->{media=(IjkExo2MediaPlayer)mp;ready=true;failed=false;loading.setVisibility(View.GONE);progress.setMax(Math.max(1,(int)((video.getDuration()+999L)/1000)));progress.setEnabled(video.getDuration()>0);setJumpsEnabled(video.getDuration()>0);playButton.setEnabled(true);handler.removeCallbacks(tick);handler.post(tick);
             int resume=getIntent().hasExtra("position")?getIntent().getIntExtra("position",0):PlaybackHistory.position(this,current.toString());if(!initialSeek&&resume>0&&resume<video.getDuration()-2000)seekExact(resume);initialSeek=true;applyRememberedSubtitle();
             if(foreground)video.start();updatePlay();scheduleHide();
         });
@@ -129,9 +135,13 @@ public final class SystemPlayerActivity extends PrivateActivity {
         int width=root.getWidth()-root.getPaddingLeft()-root.getPaddingRight();if(width<=0)return;
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,fullscreen?0:(int)((width-dp(24))*9f/16f)+dp(136),fullscreen?1:0);if(!fullscreen)p.setMargins(dp(12),0,dp(12),0);videoFrame.setLayoutParams(p);
         FrameLayout.LayoutParams vp=(FrameLayout.LayoutParams)video.getLayoutParams();vp.gravity=fullscreen?Gravity.CENTER:Gravity.TOP|Gravity.CENTER_HORIZONTAL;vp.bottomMargin=fullscreen?0:dp(136);video.setLayoutParams(vp);videoFrame.setBackground(PlayerUi.surface(this,Color.BLACK,fullscreen?0:18));
-        jumpSettings.setVisibility(fullscreen?View.VISIBLE:View.GONE);fullscreenJumps.setVisibility(fullscreen?View.VISIBLE:View.GONE);FrameLayout.LayoutParams cp=(FrameLayout.LayoutParams)controls.getLayoutParams();cp.height=dp(fullscreen?192:136);controls.setLayoutParams(cp);
+        jumpSettings.setVisibility(fullscreen?View.VISIBLE:View.GONE);fullscreenJumps.setVisibility(fullscreen?View.VISIBLE:View.GONE);FrameLayout.LayoutParams cp=(FrameLayout.LayoutParams)controls.getLayoutParams();cp.height=dp(136);cp.leftMargin=fullscreen?safeLeft:0;cp.rightMargin=fullscreen?safeRight:0;cp.bottomMargin=fullscreen?safeBottom:0;controls.setLayoutParams(cp);
+        controlSpace.setVisibility(fullscreen?View.GONE:View.VISIBLE);LinearLayout.LayoutParams playSize=(LinearLayout.LayoutParams)playButton.getLayoutParams();playSize.width=dp(fullscreen?48:56);playSize.height=dp(fullscreen?48:56);playButton.setLayoutParams(playSize);
+        for(Button button:jumpButtons)if(button.getId()>=1200)button.setBackground(PlayerUi.feedback(this,Color.TRANSPARENT,12));
+        jumpSettings.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.SURFACE,12));speedButton.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.SURFACE,12));playButton.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.ACCENT,28));updatePlay();
+        FrameLayout.LayoutParams hp=(FrameLayout.LayoutParams)overlayHeader.getLayoutParams();hp.leftMargin=fullscreen?safeLeft:0;hp.rightMargin=fullscreen?safeRight:0;hp.topMargin=fullscreen?safeTop:0;overlayHeader.setLayoutParams(hp);
         FrameLayout.LayoutParams feedback=(FrameLayout.LayoutParams)jumpFeedback.getLayoutParams();feedback.gravity=fullscreen?Gravity.CENTER:Gravity.TOP|Gravity.CENTER_HORIZONTAL;feedback.topMargin=fullscreen?0:Math.max(dp(16),(int)((width-dp(24))*9f/32f)-dp(24));jumpFeedback.setLayoutParams(feedback);
-        controls.setBackground(fullscreen?new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0x10000000,0xE6000000}):PlayerUi.surface(this,PlayerUi.SURFACE,0));
+        controls.setBackground(fullscreen?new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0x00000000,0x99000000}):PlayerUi.surface(this,PlayerUi.SURFACE,0));
     }
     private void setFullscreen(boolean value){
         fullscreen=value;header.setVisibility(value?View.GONE:View.VISIBLE);detailScroll.setVisibility(value?View.GONE:View.VISIBLE);setChrome(true);PlayerUi.setIcon(fullButton,value?"collapse":"fullscreen",value?"退出全屏":"进入全屏",false);
@@ -144,7 +154,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     }
     private void setChrome(boolean show){chromeVisible=show;controls.setVisibility(show?View.VISIBLE:View.GONE);overlayHeader.setVisibility(fullscreen&&show?View.VISIBLE:View.GONE);if(show)scheduleHide();}
     private void scheduleHide(){handler.removeCallbacks(hideControls);if(fullscreen)handler.postDelayed(hideControls,4000);}
-    private void updatePlay(){PlayerUi.setIcon(playButton,video.isPlaying()?"pause":"play",video.isPlaying()?"暂停":"播放",true);}
+    private void updatePlay(){PlayerUi.setIcon(playButton,video.isPlaying()?"pause":"play",video.isPlaying()?"暂停":"播放",!fullscreen);}
     private void togglePlay(){if(!ready)return;if(video.isPlaying())video.pause();else video.start();updatePlay();setChrome(true);}
     private Button makeJumpButton(int index,boolean compact,int id){
         Button button=PlayerUi.jumpButton(this,jumpValues[index],index%2==1,index>=2,compact);button.setId(id);jumpButtons.add(button);button.setEnabled(false);button.setAlpha(.45f);
@@ -159,7 +169,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void setJumpsEnabled(boolean enabled){for(Button b:jumpButtons){b.setEnabled(enabled);b.setAlpha(enabled?1:.45f);}}
     private void skip(int seconds,String label){
         if(!ready||video.getDuration()<=0)return;long now=SystemClock.uptimeMillis();int base=jumpTarget>=0&&now-lastJumpAt<450?jumpTarget:video.getCurrentPosition();int target=(int)Math.max(0,Math.min(video.getDuration(),base+seconds*1000L));
-        clearLoop();seekExact(target);jumpTarget=target;lastJumpAt=now;position.setText(time(target));progress.setProgress((int)(1000L*target/video.getDuration()));setChrome(true);
+        clearLoop();seekExact(target);jumpTarget=target;lastJumpAt=now;position.setText(time(target));progress.setProgress(target/1000);setChrome(true);
         String direction=target==0&&base+seconds*1000L<0?"已到开头":target==video.getDuration()&&base+seconds*1000L>video.getDuration()?"已到结尾":label;showJumpFeedback(direction+"  ·  "+time(target));
     }
     private void showJumpFeedback(String message){

@@ -65,6 +65,7 @@ public final class PlaybackSmoke extends Instrumentation {
         runOnMainSync(()->activity.findViewById(1151).performClick());SystemClock.sleep(200);
         runOnMainSync(()->{try{android.app.Dialog dialog=(android.app.Dialog)PrivateTestAccess.field(activity,"jumpDialog");int[] values={7,2,13,3};for(int i=0;i<4;i++)((android.widget.EditText)dialog.findViewById(1700+i)).setText(String.valueOf(values[i]));dialog.findViewById(1705).performClick();}catch(Exception error){throw new RuntimeException(error);}});SystemClock.sleep(200);
         assertCustomSteps(activity);
+        exercisePrecision(activity);
         setPosition(activity,650000);runOnMainSync(()->{View button=activity.findViewById(1102);button.requestRectangleOnScreen(new android.graphics.Rect(0,0,button.getWidth(),button.getHeight()),true);});tapControl(activity,1102);awaitPosition(activity,663000);
         runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,true);SystemClock.sleep(700);
         AtomicReference<Integer> count=new AtomicReference<>();runOnMainSync(()->count.set(((android.view.ViewGroup)activity.findViewById(1250)).getChildCount()));if(count.get()!=4)throw new AssertionError("Fullscreen must contain exactly four custom jump actions");
@@ -77,6 +78,19 @@ public final class PlaybackSmoke extends Instrumentation {
         setPosition(activity,1295000);tapControl(activity,1202);awaitPosition(activity,1300000);
         runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,false);
     }
+    private void exercisePrecision(Activity activity)throws Exception{
+        runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,true);SystemClock.sleep(500);
+        setPosition(activity,650000);dragTimeline(activity,false,false);awaitPosition(activity,660000);
+        setPosition(activity,650000);dragTimeline(activity,true,false);awaitPosition(activity,653000);
+        setPosition(activity,650000);dragTimeline(activity,false,true);awaitPosition(activity,650000);
+        runOnMainSync(()->{try{View controls=activity.findViewById(1006);int[] xy=new int[2];controls.getLocationOnScreen(xy);float d=activity.getResources().getDisplayMetrics().density;if(controls.getHeight()>140*d||xy[1]+controls.getHeight()>activity.getWindow().getDecorView().getHeight())throw new AssertionError("Transparent controls exceed compact bottom area");for(int id:new int[]{1004,1005,1200,1201,1202,1203,1251}){View target=activity.findViewById(id);android.graphics.Rect visible=new android.graphics.Rect();if(!target.getGlobalVisibleRect(visible)||visible.width()<target.getWidth()||visible.height()<target.getHeight()||target.getHeight()<47*d||target.getWidth()<47*d)throw new AssertionError("Landscape target clipped: "+id);}}catch(Exception e){throw new RuntimeException(e);}});
+        report("Real touchscreen second dragging, fine dragging and cancellation verified");runOnMainSync(()->activity.findViewById(1005).performClick());awaitLayout(activity,false);
+    }
+    private void dragTimeline(Activity activity,boolean fine,boolean cancel)throws Exception{
+        AtomicReference<float[]> area=new AtomicReference<>();runOnMainSync(()->{View bar=activity.findViewById(1007);int[] xy=new int[2];bar.getLocationOnScreen(xy);area.set(new float[]{xy[0]+bar.getWidth()/2f,xy[1]+bar.getHeight()/2f,activity.getResources().getDisplayMetrics().density});});float[] a=area.get();long down=SystemClock.uptimeMillis();
+        touch(down,MotionEvent.ACTION_DOWN,a[0],a[1]);for(int i=1;i<=12;i++){SystemClock.sleep(20);touch(down,MotionEvent.ACTION_MOVE,a[0]+i*5*a[2],a[1]-(fine?48*a[2]:0));}touch(down,cancel?MotionEvent.ACTION_CANCEL:MotionEvent.ACTION_UP,a[0]+60*a[2],a[1]-(fine?48*a[2]:0));SystemClock.sleep(250);
+    }
+    private void touch(long down,int action,float x,float y){MotionEvent event=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,x,y,0);event.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);getUiAutomation().injectInputEvent(event,true);event.recycle();}
     private void assertCustomSteps(Activity activity){runOnMainSync(()->{String[] labels={"后退7秒","后退2分钟","前进13秒","前进3分钟"};for(int i=0;i<4;i++)if(!labels[i].contentEquals(activity.findViewById(1100+i).getContentDescription()))throw new AssertionError("Custom jump label or persistence mismatch: "+i);if(activity.findViewById(1104)!=null||activity.findViewById(1204)!=null)throw new AssertionError("Old fixed jump buttons remain");});}
     private void setPosition(Activity activity,int position)throws Exception{runOnMainSync(()->{PlaybackView v=new PlaybackView(activity.findViewById(1000));v.pause();v.seekTo(position);});awaitPosition(activity,position);SystemClock.sleep(500);}
     private void awaitPosition(Activity activity,int target)throws Exception{

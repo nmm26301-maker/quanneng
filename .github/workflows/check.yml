@@ -97,12 +97,19 @@ jobs:
             timeout 300s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.TransferSmoke | tee "$RUNNER_TEMP/transfer-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/transfer-logcat.txt"
             grep -q QUANNENG_SECURITY_OK "$RUNNER_TEMP/security-smoke.txt" && grep -q QUANNENG_SMOKE_OK "$RUNNER_TEMP/playback-smoke.txt" && grep -q QUANNENG_BROWSER_OK "$RUNNER_TEMP/browser-smoke.txt" && grep -q QUANNENG_TRANSFER_OK "$RUNNER_TEMP/transfer-smoke.txt"
+            adb shell am force-stop app.quanneng
+            adb shell locksettings set-pin 482947
+            timeout 150s adb shell am instrument -w app.quanneng.tests/app.quanneng.tests.SystemUnlockSmoke | tee "$RUNNER_TEMP/system-unlock-smoke.txt"
+            adb logcat -d -v brief > "$RUNNER_TEMP/system-unlock-logcat.txt"
+            grep -q QUANNENG_SYSTEM_UNLOCK_OK "$RUNNER_TEMP/system-unlock-smoke.txt"
       - name: Save Android playback test diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Android-playback-smoke
           path: |
+            ${{ runner.temp }}/system-unlock-smoke.txt
+            ${{ runner.temp }}/system-unlock-logcat.txt
             ${{ runner.temp }}/playback-smoke.txt
             ${{ runner.temp }}/playback-logcat.txt
             ${{ runner.temp }}/browser-smoke.txt
