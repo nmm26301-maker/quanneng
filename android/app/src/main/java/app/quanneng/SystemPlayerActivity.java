@@ -29,7 +29,8 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private LinearLayout root,header,controls,overlayHeader,details,fullscreenJumps;
     private ScrollView detailScroll;
     private FrameLayout videoFrame;
-    private TextView title,overlayTitle,position,total,pointALabel,pointBLabel,jumpFeedback;
+    private TextView title,overlayTitle,overlayClock,position,total,pointALabel,pointBLabel,jumpFeedback;
+    private long clockUpdatedAt;
     private AlertDialog jumpDialog;
     private Button loopButton,speedButton,jumpSettings;
     private int[] jumpValues=JumpSteps.DEFAULTS.clone();
@@ -63,7 +64,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
             if(!scrubbing){position.setText(time(now));progress.setProgress(now/1000);}
             total.setText(time(video.getDuration()));progress.setSecondaryProgress((int)((long)progress.getMax()*video.getBufferPercentage()/100));updatePlay();
         }
-        handler.postDelayed(this,100);
+        updateOverlayClock();handler.postDelayed(this,100);
     }};
     @Override public void onCreate(Bundle state){
         super.onCreate(state);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -129,7 +130,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private LinearLayout card(String heading,String subtitle){LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(dp(16),dp(16),dp(16),dp(16));GradientDrawable bg=PlayerUi.surface(this,PlayerUi.SURFACE,20);bg.setStroke(dp(1),PlayerUi.BORDER);card.setBackground(bg);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(16);details.addView(card,p);TextView h=PlayerUi.text(this,heading,17,PlayerUi.TEXT);h.setTypeface(null,Typeface.BOLD);card.addView(h);TextView sub=PlayerUi.text(this,subtitle,12,PlayerUi.MUTED);sub.setPadding(0,dp(6),0,dp(12));card.addView(sub);return card;}
     private LinearLayout row(LinearLayout parent){LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);parent.addView(row,new LinearLayout.LayoutParams(-1,-2));return row;}
     private void addWeighted(LinearLayout row,View view,int height){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(height),1);p.setMargins(dp(4),dp(4),dp(4),dp(4));row.addView(view,p);}
-    private void buildOverlayHeader(){overlayHeader=new LinearLayout(this);overlayHeader.setGravity(Gravity.CENTER_VERTICAL);overlayHeader.setPadding(dp(12),dp(4),dp(16),dp(4));overlayHeader.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xD9000000,0x00000000}));videoFrame.addView(overlayHeader,new FrameLayout.LayoutParams(-1,dp(64),Gravity.TOP));ImageButton back=PlayerUi.icon(this,"back","退出全屏",false);back.setId(1009);overlayHeader.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));back.setOnClickListener(v->setFullscreen(false));overlayTitle=PlayerUi.text(this,"",14,PlayerUi.TEXT);overlayTitle.setSingleLine();overlayTitle.setEllipsize(TextUtils.TruncateAt.END);overlayHeader.addView(overlayTitle,new LinearLayout.LayoutParams(0,-2,1));overlayHeader.setVisibility(View.GONE);}
+    private void buildOverlayHeader(){overlayHeader=new LinearLayout(this);overlayHeader.setGravity(Gravity.CENTER_VERTICAL);overlayHeader.setPadding(dp(12),dp(4),dp(16),dp(4));overlayHeader.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xD9000000,0x00000000}));videoFrame.addView(overlayHeader,new FrameLayout.LayoutParams(-1,dp(64),Gravity.TOP));ImageButton back=PlayerUi.icon(this,"back","退出全屏",false);back.setId(1009);overlayHeader.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));back.setOnClickListener(v->setFullscreen(false));overlayTitle=PlayerUi.text(this,"",14,PlayerUi.TEXT);overlayTitle.setSingleLine();overlayTitle.setEllipsize(TextUtils.TruncateAt.END);overlayHeader.addView(overlayTitle,new LinearLayout.LayoutParams(0,-2,1));overlayClock=PlayerUi.text(this,"",14,PlayerUi.TEXT);overlayClock.setId(1313);overlayClock.setTypeface(Typeface.MONOSPACE);overlayClock.setPadding(dp(12),0,0,0);overlayClock.setGravity(Gravity.CENTER_VERTICAL);overlayClock.setContentDescription("当前时间");overlayHeader.addView(overlayClock,new LinearLayout.LayoutParams(-2,dp(48)));overlayHeader.setVisibility(View.GONE);}
     private void configureMedia(){
         video.setOnPreparedListener(mp->{media=(IjkExo2MediaPlayer)mp;ready=true;failed=false;loading.setVisibility(View.GONE);progress.setMax(Math.max(1,(int)((video.getDuration()+999L)/1000)));progress.setEnabled(video.getDuration()>0);setJumpsEnabled(video.getDuration()>0);playButton.setEnabled(true);screenLockButton.setEnabled(true);handler.removeCallbacks(tick);handler.post(tick);
             int resume=getIntent().hasExtra("position")?getIntent().getIntExtra("position",0):PlaybackHistory.position(this,current.toString());if(!initialSeek&&resume>0&&resume<video.getDuration()-2000)seekExact(resume);initialSeek=true;applyRememberedSubtitle();
@@ -143,7 +144,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,fullscreen?0:(int)((width-dp(24))*9f/16f)+dp(136),fullscreen?1:0);if(!fullscreen)p.setMargins(dp(12),0,dp(12),0);videoFrame.setLayoutParams(p);
         FrameLayout.LayoutParams vp=(FrameLayout.LayoutParams)video.getLayoutParams();vp.gravity=fullscreen?Gravity.CENTER:Gravity.TOP|Gravity.CENTER_HORIZONTAL;vp.bottomMargin=fullscreen?0:dp(136);video.setLayoutParams(vp);videoFrame.setBackground(PlayerUi.surface(this,Color.BLACK,fullscreen?0:18));
         jumpSettings.setVisibility(fullscreen?View.VISIBLE:View.GONE);fullscreenJumps.setVisibility(fullscreen?View.VISIBLE:View.GONE);FrameLayout.LayoutParams cp=(FrameLayout.LayoutParams)controls.getLayoutParams();cp.height=dp(136);cp.leftMargin=fullscreen?safeLeft:0;cp.rightMargin=fullscreen?safeRight:0;cp.bottomMargin=fullscreen?safeBottom:0;controls.setLayoutParams(cp);
-        LinearLayout lockParent=fullscreen?overlayHeader:controlButtons;if(screenLockButton.getParent()!=lockParent){((android.view.ViewGroup)screenLockButton.getParent()).removeView(screenLockButton);lockParent.addView(screenLockButton,new LinearLayout.LayoutParams(dp(48),dp(48)));}screenLockButton.setContentDescription(fullscreen?"防误触锁定":"防误触锁定（进入全屏）");
+        LinearLayout lockParent=fullscreen?overlayHeader:controlButtons;if(screenLockButton.getParent()!=lockParent){((android.view.ViewGroup)screenLockButton.getParent()).removeView(screenLockButton);if(fullscreen)lockParent.addView(screenLockButton,Math.max(0,lockParent.getChildCount()-1),new LinearLayout.LayoutParams(dp(48),dp(48)));else lockParent.addView(screenLockButton,new LinearLayout.LayoutParams(dp(48),dp(48)));}screenLockButton.setContentDescription(fullscreen?"防误触锁定":"防误触锁定（进入全屏）");
         controlSpace.setVisibility(fullscreen?View.GONE:View.VISIBLE);LinearLayout.LayoutParams playSize=(LinearLayout.LayoutParams)playButton.getLayoutParams();playSize.width=dp(fullscreen?48:56);playSize.height=dp(fullscreen?48:56);playButton.setLayoutParams(playSize);
         for(Button button:jumpButtons)if(button.getId()>=1200)button.setBackground(PlayerUi.feedback(this,Color.TRANSPARENT,12));
         jumpSettings.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.SURFACE,12));speedButton.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.SURFACE,12));playButton.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.ACCENT,28));updatePlay();
@@ -161,7 +162,8 @@ public final class SystemPlayerActivity extends PrivateActivity {
         else getWindow().getDecorView().setSystemUiVisibility(fullscreen?View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY:0);
         root.requestApplyInsets();
     }
-    private void setChrome(boolean show){show=show&&!touchLocked;chromeVisible=show;controls.setVisibility(show?View.VISIBLE:View.GONE);overlayHeader.setVisibility(fullscreen&&show?View.VISIBLE:View.GONE);if(show)scheduleHide();}
+    private void setChrome(boolean show){show=show&&!touchLocked;chromeVisible=show;controls.setVisibility(show?View.VISIBLE:View.GONE);overlayHeader.setVisibility(fullscreen&&show?View.VISIBLE:View.GONE);if(show){clockUpdatedAt=0;updateOverlayClock();scheduleHide();}}
+    private void updateOverlayClock(){if(overlayClock==null||!fullscreen||!chromeVisible)return;long now=SystemClock.elapsedRealtime();if(now-clockUpdatedAt<1000)return;clockUpdatedAt=now;String value=android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date());if(!value.contentEquals(overlayClock.getText())){overlayClock.setText(value);overlayClock.setContentDescription("当前时间 "+value);}}
     private void scheduleHide(){handler.removeCallbacks(hideControls);if(fullscreen)handler.postDelayed(hideControls,4000);}
     private void updatePlay(){PlayerUi.setIcon(playButton,video.isPlaying()?"pause":"play",video.isPlaying()?"暂停":"播放",!fullscreen);}
     private void togglePlay(){if(!ready)return;if(video.isPlaying())video.pause();else video.start();updatePlay();setChrome(true);}
