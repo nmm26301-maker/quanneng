@@ -14,6 +14,8 @@ for name in ['classes','dex','generated']:
  directory=build/name
  if directory.exists():shutil.rmtree(directory)
  directory.mkdir()
+def visible_files(base,pattern):
+ return sorted(p for p in base.rglob(pattern) if not any(part.startswith('.') for part in p.relative_to(base).parts))
 def run(*cmd):subprocess.run([str(x) for x in cmd],check=True)
 source=root/'android'/'app'/'src'/'main'
 libraries=prepare(sdk,args.abi)
@@ -32,11 +34,11 @@ run(tools/'aapt2','compile','--dir',source/'res','-o',build/'resources.zip')
 overlay_args=[]
 for resource in library_resources+[build/'resources.zip']:overlay_args.extend(['-R',resource])
 run(tools/'aapt2','link','--auto-add-overlay','-o',build/'base.apk','-I',platform,'--manifest',source/'AndroidManifest.xml','--java',build/'generated','--extra-packages',':'.join(library_packages),'--min-sdk-version','26','--target-sdk-version','35','-A',web,*overlay_args)
-java=sorted((source/'java').rglob('*.java'))+sorted((build/'generated').rglob('*.java'))
+java=visible_files(source/'java','*.java')+visible_files(build/'generated','*.java')
 compiler=['java','-jar',args.compiler_jar] if args.compiler_jar else ['javac']
 classpath=os.pathsep.join(str(x) for x in [platform]+[library/'classes.jar' for library in libraries])
 run(*compiler,'-encoding','UTF-8','-source','8','-target','8','-classpath',classpath,'-d',build/'classes',*java)
-run(tools/'d8','--lib',platform,'--min-api','26','--output',build/'dex',*sorted((build/'classes').rglob('*.class')),*[library/'classes.jar' for library in libraries])
+run(tools/'d8','--lib',platform,'--min-api','26','--output',build/'dex',*visible_files(build/'classes','*.class'),*[library/'classes.jar' for library in libraries])
 with zipfile.ZipFile(build/'base.apk','a',compression=zipfile.ZIP_DEFLATED) as apk:
  for dex in (build/'dex').glob('*.dex'):apk.write(dex,dex.name)
  for library in libraries:

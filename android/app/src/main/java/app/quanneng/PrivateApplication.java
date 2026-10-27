@@ -5,7 +5,8 @@ import android.os.Bundle;
 
 /** 使用平台生命周期识别整个应用离开前台；应用内页面切换不重复要求密码。 */
 public final class PrivateApplication extends Application implements Application.ActivityLifecycleCallbacks {
-    private int started;
+    private volatile int started;
+    boolean visible(){return started>0;}
     private final android.os.Handler handler=new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable expire=()->{if(started==0){PrivateSession.lock();VaultStore.purge(this);}};
     @Override public void onCreate(){super.onCreate();PrivateSession.lock();VaultStore.purge(this);LanShareService.cleanAbandoned(this);registerActivityLifecycleCallbacks(this);android.content.BroadcastReceiver screen=new android.content.BroadcastReceiver(){@Override public void onReceive(android.content.Context c,android.content.Intent intent){PrivateSession.lock();VaultStore.purge(c);}};android.content.IntentFilter filter=new android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF);if(android.os.Build.VERSION.SDK_INT>=33)registerReceiver(screen,filter,android.content.Context.RECEIVER_NOT_EXPORTED);else registerReceiver(screen,filter);}

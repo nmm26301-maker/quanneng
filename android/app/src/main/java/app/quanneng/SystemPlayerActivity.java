@@ -33,7 +33,10 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private AlertDialog jumpDialog;
     private Button loopButton,speedButton,jumpSettings;
     private int[] jumpValues=JumpSteps.DEFAULTS.clone();
-    private ImageButton playButton,fullButton;
+    private ImageButton playButton,fullButton,screenLockButton,unlockTouchButton;
+    private View touchShield;
+    private LinearLayout unlockTouchArea;
+    private boolean touchLocked;
     private ProgressBar loading;
     private PrecisionSeekBar progress;
     private LinearLayout controlButtons;
@@ -64,7 +67,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     }};
     @Override public void onCreate(Bundle state){
         super.onCreate(state);getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        jumpValues=JumpSteps.load(this);buildPlayer();configureMedia();if(Build.VERSION.SDK_INT>=33){backCallback=()->{if(fullscreen)setFullscreen(false);else finish();};getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,backCallback);}
+        jumpValues=JumpSteps.load(this);buildPlayer();configureMedia();if(Build.VERSION.SDK_INT>=33){backCallback=()->{if(touchLocked){lockedHint();return;}if(fullscreen)setFullscreen(false);else finish();};getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,backCallback);}
         queue=getIntent().getStringArrayListExtra("queue");current=getIntent().getData();if(current==null){finish();return;}whenUnlocked(()->{if(!restoreVault())load(current,true);});
     }
     private void buildPlayer(){
@@ -80,6 +83,9 @@ public final class SystemPlayerActivity extends PrivateActivity {
         touchLayer.setOnTouchListener(new PlayerGestures(this,new PlayerGestures.Target(){public boolean ready(){return SystemPlayerActivity.this.ready;}public int position(){return video.getCurrentPosition();}public int duration(){return video.getDuration();}public void seek(int ms){clearLoop();seekExact(ms);setChrome(true);}public void toggle(){togglePlay();}public void tap(){if(fullscreen)setChrome(!chromeVisible);}public void feedback(String s){showJumpFeedback(s);}public float speed(){return selectedSpeed;}public void speed(float f){if(media!=null){try{media.setSpeed(f,1f);selectedSpeed=f;speedButton.setText(f+"×");}catch(RuntimeException ignored){}}}}));
         buildControls();buildDetails();buildOverlayHeader();
         jumpFeedback=PlayerUi.text(this,"",14,PlayerUi.TEXT);jumpFeedback.setId(1300);jumpFeedback.setGravity(Gravity.CENTER);jumpFeedback.setPadding(dp(18),dp(12),dp(18),dp(12));jumpFeedback.setBackground(PlayerUi.surface(this,0xEF14251E,16));jumpFeedback.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);jumpFeedback.setVisibility(View.GONE);videoFrame.addView(jumpFeedback,new FrameLayout.LayoutParams(-2,-2,Gravity.CENTER));
+        touchShield=new View(this);touchShield.setId(1311);touchShield.setVisibility(View.GONE);touchShield.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);touchShield.setOnTouchListener((v,event)->{if(event.getActionMasked()==MotionEvent.ACTION_UP)lockedHint();return true;});videoFrame.addView(touchShield,new FrameLayout.LayoutParams(-1,-1));
+        unlockTouchArea=new LinearLayout(this);unlockTouchArea.setOrientation(1);unlockTouchArea.setGravity(Gravity.CENTER);unlockTouchArea.setPadding(dp(4),dp(4),dp(4),dp(4));unlockTouchArea.setBackground(PlayerUi.surface(this,0x66000000,16));unlockTouchArea.setVisibility(View.GONE);videoFrame.addView(unlockTouchArea,new FrameLayout.LayoutParams(dp(76),dp(88),Gravity.END|Gravity.CENTER_VERTICAL));
+        unlockTouchButton=PlayerUi.icon(this,"lock","长按解除防误触锁定",false);unlockTouchButton.setId(1312);unlockTouchArea.addView(unlockTouchButton,new LinearLayout.LayoutParams(dp(48),dp(48)));TextView unlockHint=PlayerUi.text(this,"长按解锁",12,PlayerUi.TEXT);unlockHint.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);unlockTouchArea.addView(unlockHint);unlockTouchButton.setOnClickListener(v->lockedHint());unlockTouchButton.setOnLongClickListener(v->{setTouchLocked(false);v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);return true;});
         root.post(this::sizePlayer);root.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol||b-t!=ob-ot)sizePlayer();});
         root.setOnApplyWindowInsetsListener((view,insets)->{
             if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());android.graphics.Insets stable=insets.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()|WindowInsets.Type.displayCutout());android.graphics.Insets gestures=insets.getInsets(WindowInsets.Type.systemGestures());safeLeft=Math.max(stable.left,gestures.left);safeRight=Math.max(stable.right,gestures.right);safeBottom=Math.max(stable.bottom,gestures.bottom);safeTop=stable.top;view.setPadding(fullscreen?0:bars.left,fullscreen?0:bars.top,fullscreen?0:bars.right,fullscreen?0:bars.bottom);}
@@ -96,6 +102,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
         fullscreenJumps=new LinearLayout(this);fullscreenJumps.setId(1250);for(int index=0;index<4;index++){Button b=makeJumpButton(index,true,1200+index);addWeighted(fullscreenJumps,b,48);}fullscreenJumps.setVisibility(View.GONE);
         LinearLayout buttons=row(controls);controlButtons=buttons;buttons.setGravity(Gravity.CENTER_VERTICAL);
         playButton=PlayerUi.icon(this,"play","播放",true);playButton.setId(1004);LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(dp(56),dp(56));pp.setMargins(dp(4),0,dp(4),0);buttons.addView(playButton,pp);playButton.setOnClickListener(v->togglePlay());
+        screenLockButton=PlayerUi.icon(this,"lock","防误触锁定（进入全屏）",false);screenLockButton.setId(1310);screenLockButton.setEnabled(false);buttons.addView(screenLockButton,new LinearLayout.LayoutParams(dp(48),dp(48)));screenLockButton.setOnClickListener(v->{if(ready){if(!fullscreen)setFullscreen(true);setTouchLocked(true);}});
         buttons.addView(fullscreenJumps,new LinearLayout.LayoutParams(0,dp(56),1));controlSpace=new View(this);buttons.addView(controlSpace,new LinearLayout.LayoutParams(0,1,1));
         jumpSettings=PlayerUi.chip(this,"步长");jumpSettings.setId(1251);jumpSettings.setContentDescription("设置四个跳转时间");buttons.addView(jumpSettings,new LinearLayout.LayoutParams(dp(56),dp(48)));jumpSettings.setOnClickListener(v->chooseJumpSteps());
         speedButton=PlayerUi.chip(this,"1.0×");buttons.addView(speedButton,new LinearLayout.LayoutParams(dp(56),dp(48)));speedButton.setContentDescription("选择播放速度");speedButton.setOnClickListener(v->chooseSpeed());
@@ -124,7 +131,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void addWeighted(LinearLayout row,View view,int height){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(height),1);p.setMargins(dp(4),dp(4),dp(4),dp(4));row.addView(view,p);}
     private void buildOverlayHeader(){overlayHeader=new LinearLayout(this);overlayHeader.setGravity(Gravity.CENTER_VERTICAL);overlayHeader.setPadding(dp(12),dp(4),dp(16),dp(4));overlayHeader.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xD9000000,0x00000000}));videoFrame.addView(overlayHeader,new FrameLayout.LayoutParams(-1,dp(64),Gravity.TOP));ImageButton back=PlayerUi.icon(this,"back","退出全屏",false);back.setId(1009);overlayHeader.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));back.setOnClickListener(v->setFullscreen(false));overlayTitle=PlayerUi.text(this,"",14,PlayerUi.TEXT);overlayTitle.setSingleLine();overlayTitle.setEllipsize(TextUtils.TruncateAt.END);overlayHeader.addView(overlayTitle,new LinearLayout.LayoutParams(0,-2,1));overlayHeader.setVisibility(View.GONE);}
     private void configureMedia(){
-        video.setOnPreparedListener(mp->{media=(IjkExo2MediaPlayer)mp;ready=true;failed=false;loading.setVisibility(View.GONE);progress.setMax(Math.max(1,(int)((video.getDuration()+999L)/1000)));progress.setEnabled(video.getDuration()>0);setJumpsEnabled(video.getDuration()>0);playButton.setEnabled(true);handler.removeCallbacks(tick);handler.post(tick);
+        video.setOnPreparedListener(mp->{media=(IjkExo2MediaPlayer)mp;ready=true;failed=false;loading.setVisibility(View.GONE);progress.setMax(Math.max(1,(int)((video.getDuration()+999L)/1000)));progress.setEnabled(video.getDuration()>0);setJumpsEnabled(video.getDuration()>0);playButton.setEnabled(true);screenLockButton.setEnabled(true);handler.removeCallbacks(tick);handler.post(tick);
             int resume=getIntent().hasExtra("position")?getIntent().getIntExtra("position",0):PlaybackHistory.position(this,current.toString());if(!initialSeek&&resume>0&&resume<video.getDuration()-2000)seekExact(resume);initialSeek=true;applyRememberedSubtitle();
             if(foreground)video.start();updatePlay();scheduleHide();
         });
@@ -136,10 +143,12 @@ public final class SystemPlayerActivity extends PrivateActivity {
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,fullscreen?0:(int)((width-dp(24))*9f/16f)+dp(136),fullscreen?1:0);if(!fullscreen)p.setMargins(dp(12),0,dp(12),0);videoFrame.setLayoutParams(p);
         FrameLayout.LayoutParams vp=(FrameLayout.LayoutParams)video.getLayoutParams();vp.gravity=fullscreen?Gravity.CENTER:Gravity.TOP|Gravity.CENTER_HORIZONTAL;vp.bottomMargin=fullscreen?0:dp(136);video.setLayoutParams(vp);videoFrame.setBackground(PlayerUi.surface(this,Color.BLACK,fullscreen?0:18));
         jumpSettings.setVisibility(fullscreen?View.VISIBLE:View.GONE);fullscreenJumps.setVisibility(fullscreen?View.VISIBLE:View.GONE);FrameLayout.LayoutParams cp=(FrameLayout.LayoutParams)controls.getLayoutParams();cp.height=dp(136);cp.leftMargin=fullscreen?safeLeft:0;cp.rightMargin=fullscreen?safeRight:0;cp.bottomMargin=fullscreen?safeBottom:0;controls.setLayoutParams(cp);
+        LinearLayout lockParent=fullscreen?overlayHeader:controlButtons;if(screenLockButton.getParent()!=lockParent){((android.view.ViewGroup)screenLockButton.getParent()).removeView(screenLockButton);lockParent.addView(screenLockButton,new LinearLayout.LayoutParams(dp(48),dp(48)));}screenLockButton.setContentDescription(fullscreen?"防误触锁定":"防误触锁定（进入全屏）");
         controlSpace.setVisibility(fullscreen?View.GONE:View.VISIBLE);LinearLayout.LayoutParams playSize=(LinearLayout.LayoutParams)playButton.getLayoutParams();playSize.width=dp(fullscreen?48:56);playSize.height=dp(fullscreen?48:56);playButton.setLayoutParams(playSize);
         for(Button button:jumpButtons)if(button.getId()>=1200)button.setBackground(PlayerUi.feedback(this,Color.TRANSPARENT,12));
         jumpSettings.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.SURFACE,12));speedButton.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.SURFACE,12));playButton.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.ACCENT,28));updatePlay();
         FrameLayout.LayoutParams hp=(FrameLayout.LayoutParams)overlayHeader.getLayoutParams();hp.leftMargin=fullscreen?safeLeft:0;hp.rightMargin=fullscreen?safeRight:0;hp.topMargin=fullscreen?safeTop:0;overlayHeader.setLayoutParams(hp);
+        FrameLayout.LayoutParams unlock=(FrameLayout.LayoutParams)unlockTouchArea.getLayoutParams();unlock.rightMargin=safeRight+dp(16);unlock.leftMargin=safeLeft+dp(16);unlockTouchArea.setLayoutParams(unlock);
         FrameLayout.LayoutParams feedback=(FrameLayout.LayoutParams)jumpFeedback.getLayoutParams();feedback.gravity=fullscreen?Gravity.CENTER:Gravity.TOP|Gravity.CENTER_HORIZONTAL;feedback.topMargin=fullscreen?0:Math.max(dp(16),(int)((width-dp(24))*9f/32f)-dp(24));jumpFeedback.setLayoutParams(feedback);
         controls.setBackground(fullscreen?new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0x00000000,0x99000000}):PlayerUi.surface(this,PlayerUi.SURFACE,0));
     }
@@ -152,7 +161,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
         else getWindow().getDecorView().setSystemUiVisibility(fullscreen?View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY:0);
         root.requestApplyInsets();
     }
-    private void setChrome(boolean show){chromeVisible=show;controls.setVisibility(show?View.VISIBLE:View.GONE);overlayHeader.setVisibility(fullscreen&&show?View.VISIBLE:View.GONE);if(show)scheduleHide();}
+    private void setChrome(boolean show){show=show&&!touchLocked;chromeVisible=show;controls.setVisibility(show?View.VISIBLE:View.GONE);overlayHeader.setVisibility(fullscreen&&show?View.VISIBLE:View.GONE);if(show)scheduleHide();}
     private void scheduleHide(){handler.removeCallbacks(hideControls);if(fullscreen)handler.postDelayed(hideControls,4000);}
     private void updatePlay(){PlayerUi.setIcon(playButton,video.isPlaying()?"pause":"play",video.isPlaying()?"暂停":"播放",!fullscreen);}
     private void togglePlay(){if(!ready)return;if(video.isPlaying())video.pause();else video.start();updatePlay();setChrome(true);}
@@ -180,11 +189,16 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void openSubtitles(){if(!ready){toast("请等待视频加载");return;}try{startActivityForResult(new Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),44);}catch(ActivityNotFoundException e){toast("系统未找到文件选择器");}}
     @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);root.post(this::sizePlayer);}
     @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(fullscreen){if(focused){applySystemBars();setChrome(true);}else handler.removeCallbacks(hideControls);}}
-    @Override public void onBackPressed(){if(fullscreen){setFullscreen(false);return;}super.onBackPressed();}
+    @Override public void onBackPressed(){if(touchLocked){lockedHint();return;}if(fullscreen){setFullscreen(false);return;}super.onBackPressed();}
+    private void lockedHint(){showJumpFeedback("已锁定触控 · 长按右侧锁按钮解除");}
+    private void setTouchLocked(boolean value){
+        touchLocked=value;handler.removeCallbacks(hideControls);scrubbing=false;touchShield.setVisibility(value?View.VISIBLE:View.GONE);unlockTouchArea.setVisibility(value?View.VISIBLE:View.GONE);touchLayer.setImportantForAccessibility(value?View.IMPORTANT_FOR_ACCESSIBILITY_NO:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);setChrome(!value);
+        if(value){lockedHint();unlockTouchButton.requestFocus();}else{showJumpFeedback("已解除防误触锁定");playButton.requestFocus();}
+    }
     private void seekExact(int value){jumpTarget=-1;try{if(media!=null)media.seekTo((long)value);else video.seekTo(value);}catch(IllegalStateException error){toast("视频尚未准备好，请稍后重试");}}
     private void clearLoop(){looping=false;updatePoints();}
     private void load(Uri uri,boolean initial){
-        rememberPosition();++mediaEpoch;activeSubtitle=PlaybackHistory.subtitle(this,uri.toString());subtitleStamp="";current=uri;initialSeek=false;selectedSpeed=1f;ready=false;failed=false;media=null;jumpTarget=-1;setJumpsEnabled(false);pointA=pointB=0;clearLoop();title.setText(displayName(uri));title.setContentDescription(displayName(uri));overlayTitle.setText(displayName(uri));position.setText("连接中…");loading.setVisibility(View.VISIBLE);playButton.setEnabled(false);progress.setEnabled(false);progress.setProgress(0);speedButton.setText("1.0×");
+        rememberPosition();++mediaEpoch;activeSubtitle=PlaybackHistory.subtitle(this,uri.toString());subtitleStamp="";current=uri;initialSeek=false;selectedSpeed=1f;ready=false;failed=false;media=null;jumpTarget=-1;setJumpsEnabled(false);pointA=pointB=0;clearLoop();title.setText(displayName(uri));title.setContentDescription(displayName(uri));overlayTitle.setText(displayName(uri));position.setText("连接中…");loading.setVisibility(View.VISIBLE);playButton.setEnabled(false);screenLockButton.setEnabled(false);progress.setEnabled(false);progress.setProgress(0);speedButton.setText("1.0×");
         HashMap<String,String> headers=new HashMap<>();
         if(initial){try{JSONObject data=new JSONObject(getIntent().getStringExtra("headers")==null?"{}":getIntent().getStringExtra("headers"));Iterator<String> keys=data.keys();while(keys.hasNext()){String k=keys.next();headers.put(k,data.getString(k));}}catch(JSONException ignored){}
             String cookie=getIntent().getStringExtra("cookie");if(cookie!=null)headers.put("Cookie",cookie);
@@ -199,7 +213,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
         String path=uri.getLastPathSegment();return path==null?"全能播放器":path;
     }
     private void showFailure(int code){
-        if(failed||isFinishing())return;failed=true;ready=false;setJumpsEnabled(false);loading.setVisibility(View.GONE);playButton.setEnabled(false);progress.setEnabled(false);setChrome(true);video.stopPlayback();
+        if(failed||isFinishing())return;if(touchLocked)setTouchLocked(false);failed=true;ready=false;setJumpsEnabled(false);loading.setVisibility(View.GONE);playButton.setEnabled(false);screenLockButton.setEnabled(false);progress.setEnabled(false);setChrome(true);video.stopPlayback();
         String reason=code==-1010?"设备不支持此视频编码。":code==-1007?"视频数据格式不正确或文件损坏。":code==-110?"加载超时，请检查网络和链接是否过期。":"视频地址已失效、需要来源授权，或网络连接失败。";
         if("http".equals(current.getScheme()))reason+=" 请确认发送端仍在共享，且两台设备连接同一 Wi-Fi。";
         position.setText(reason);
