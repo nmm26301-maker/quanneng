@@ -39,18 +39,26 @@ public final class BrowserSmoke extends Instrumentation {
                     }
                 });web.loadUrl("https://page.fixture.test/index?ready=1");
             });
-            long deadline=SystemClock.elapsedRealtime()+25000;boolean ready=false;
-            while(SystemClock.elapsedRealtime()<deadline){if(count(browser)>=3&&"true".equals(js(web,"!!document.querySelector('video')&&document.querySelector('video').currentTime>0"))){ready=true;break;}SystemClock.sleep(150);}
-            if(!ready)throw new AssertionError("Cross-frame/blob detector failed: "+count(browser)+" sources; advanced="+field(browser,"advanced"));
-            runOnMainSync(()->{
-                try{
-                    Map<?,?> contexts=(Map<?,?>)field(browser,"contexts");JSONObject iframe=(JSONObject)contexts.get("https://media.fixture.test/stream?id=iframe");
-                    if(iframe==null||!iframe.optString("page").startsWith("https://frame.fixture.test/"))throw new AssertionError("Nested frame source context lost");
-                    if(((List<?>)field(browser,"media")).toString().contains("blob:"))throw new AssertionError("Unplayable blob was exported");
-                }catch(Exception error){throw new RuntimeException(error);}
-            });
-            report("Cross-origin iframe, extensionless fetch/XHR sources and actual blob playback detected");runOnMainSync(browser::finish);SystemClock.sleep(300);
-            Activity app=open("app.quanneng.MainActivity",new Intent());WebView ui=(WebView)field(app,"web");await(ui,"!!document.querySelector('.bottom-nav')");
+            await(web,"!!document.querySelector('iframe')");SystemClock.sleep(2000);
+            if(count(browser)!=0)throw new AssertionError("Preloads/autoplay exported before the user's play gesture");
+            AtomicReference<Intent> handed=new AtomicReference<>();
+            ActivityMonitor handoff=new ActivityMonitor(){@Override public ActivityResult onStartActivity(Intent intent){if(Intent.ACTION_SEND.equals(intent.getAction())&&intent.hasExtra("mediaContext")){handed.set(new Intent(intent));return new ActivityResult(Activity.RESULT_CANCELED,null);}return null;}};
+            addMonitor(handoff);
+            AtomicReference<int[]> point=new AtomicReference<>();runOnMainSync(()->{int[] xy=new int[2];web.getLocationOnScreen(xy);float d=web.getResources().getDisplayMetrics().density;point.set(new int[]{xy[0]+(int)(90*d),xy[1]+(int)(60*d)});});
+            int[] xy=point.get();long now=SystemClock.uptimeMillis();android.view.MotionEvent down=android.view.MotionEvent.obtain(now,now,0,xy[0],xy[1],0),up=android.view.MotionEvent.obtain(now,now+80,1,xy[0],xy[1],0);down.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);up.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);getUiAutomation().injectInputEvent(down,true);getUiAutomation().injectInputEvent(up,true);down.recycle();up.recycle();
+            long deadline=SystemClock.elapsedRealtime()+20000;while(handed.get()==null&&SystemClock.elapsedRealtime()<deadline)SystemClock.sleep(100);removeMonitor(handoff);
+            Intent selected=handed.get();if(selected==null)throw new AssertionError("User play did not automatically hand off the selected cross-frame blob");
+            if(!"https://media.fixture.test/stream?id=chosen".equals(selected.getStringExtra(Intent.EXTRA_TEXT)))throw new AssertionError("Unrelated video handed off");
+            JSONObject metadata=new JSONObject(selected.getStringExtra("mediaContext"));
+            if(!metadata.optString("title").contains("12")||!metadata.optString("frame").startsWith("https://frame.fixture.test/")||!metadata.optString("page").startsWith("https://page.fixture.test/"))throw new AssertionError("Title, episode or source metadata lost: "+metadata);
+            AtomicReference<Intent> nativeIntent=new AtomicReference<>();
+            ActivityMonitor nativeMonitor=new ActivityMonitor(){@Override public ActivityResult onStartActivity(Intent intent){if(intent.getComponent()!=null&&"app.quanneng.SystemPlayerActivity".equals(intent.getComponent().getClassName())){nativeIntent.set(new Intent(intent));return new ActivityResult(Activity.RESULT_CANCELED,null);}return null;}};
+            addMonitor(nativeMonitor);
+            Activity app=open("app.quanneng.MainActivity",selected);WebView ui=(WebView)field(app,"web");await(ui,"!!document.querySelector('.bottom-nav')");
+            await(ui,"JSON.parse(localStorage.getItem('quanneng-v2')||'[]').some(v=>v.name.includes('12')&&v.sourcePage.startsWith('https://page.fixture.test/'))");
+            deadline=SystemClock.elapsedRealtime()+10000;while(nativeIntent.get()==null&&SystemClock.elapsedRealtime()<deadline)SystemClock.sleep(100);removeMonitor(nativeMonitor);
+            if(nativeIntent.get()==null||!nativeIntent.get().getStringExtra("title").contains("12")||!"video/mp4".equals(nativeIntent.get().getStringExtra("mime")))throw new AssertionError("Extensionless selected source did not reach native player with metadata");
+            report("No preloads/autoplay exported; actual cross-frame user tap automatically handed off only the selected blob; title/source persisted and extensionless MIME forwarded");
             if(!"true".equals(js(ui,"!document.body.innerText.includes('AI')&&typeof window.Quanneng.requestAI==='undefined'")))throw new AssertionError("AI feature or bridge remains");
             js(ui,"Array.from(document.querySelectorAll('.bottom-nav button')).find(b=>b.textContent.includes('网址收藏')).click();true");await(ui,"!!document.querySelector('.bookmark-intro')");
             js(ui,"document.querySelector('.bookmark-intro button').click();true");await(ui,"!!document.querySelector('dialog[open]')");
@@ -63,8 +71,8 @@ public final class BrowserSmoke extends Instrumentation {
             result.putString("stream","QUANNENG_BROWSER_OK\n");finish(Activity.RESULT_OK,result);
         }catch(Throwable error){result.putString("stream","QUANNENG_BROWSER_FAILED: "+error.toString()+"\n");finish(Activity.RESULT_CANCELED,result);}
     }
-    private String page(){return "<!doctype html><video muted loop playsinline></video><iframe src='https://frame.fixture.test/player'></iframe><script>fetch('https://media.fixture.test/stream?id=fetch').then(r=>r.blob()).then(b=>{let v=document.querySelector('video');v.src=URL.createObjectURL(b);v.play()});let x=new XMLHttpRequest();x.open('GET','https://media.fixture.test/stream?id=xhr');x.responseType='blob';x.send();</script>";}
-    private String frame(){return "<!doctype html><video muted loop playsinline></video><script>fetch('https://media.fixture.test/stream?id=iframe').then(r=>r.blob()).then(b=>{let v=document.querySelector('video');v.src=URL.createObjectURL(b);v.play()});</script>";}
+    private String page(){return "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><title>测试剧 第12集</title><style>body{margin:0}iframe{border:0;width:100%;height:300px}</style><iframe src='https://frame.fixture.test/player'></iframe><video muted autoplay loop src='https://media.fixture.test/stream?id=autoplay'></video><video preload='auto' src='https://media.fixture.test/stream?id=preload'></video>";}
+    private String frame(){return "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><title>测试剧 第12集</title><style>body{margin:0}button{position:absolute;left:0;top:0;width:200px;height:120px}video{margin-top:130px}</style><button onclick=\"fetch('https://media.fixture.test/stream?id=chosen').then(r=>r.blob()).then(b=>{let v=document.querySelector('video');v.src=URL.createObjectURL(b);v.play()})\">播放第12集</button><video muted loop playsinline></video><video preload='auto' src='https://media.fixture.test/stream?id=other'></video>";}
     private Activity open(String name,Intent intent){intent.setComponent(new ComponentName("app.quanneng.next",name)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);Activity activity=startActivitySync(intent);try{PrivateTestAccess.awaitUnlocked(this,activity);}catch(Exception e){throw new RuntimeException(e);}return activity;}
     private Object field(Activity a,String name)throws Exception{Field f=a.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(a);}
     private int count(Activity a){AtomicReference<Integer> value=new AtomicReference<>(0);runOnMainSync(()->{try{value.set(((List<?>)field(a,"media")).size());}catch(Exception error){}});return value.get();}

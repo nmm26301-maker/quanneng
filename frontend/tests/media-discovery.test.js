@@ -4,20 +4,34 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 const script=fs.readFileSync(new URL('../public/media-discovery.js',import.meta.url),'utf8');
 function fixture(){
- const messages=[],events={};const pending=Promise.resolve({ok:true,url:'https://media.example/stream?id=1',headers:{get:()=> 'video/mp4'}});
- class XHR{addEventListener(event,fn){this.listener=fn;}send(){this.status=200;this.responseURL='https://media.example/stream?id=xhr';this.listener();}getResponseHeader(){return 'application/vnd.apple.mpegurl';}}
- const context={URL,Set,XMLHttpRequest:XHR,location:{href:'https://frame.example/player'},document:{querySelectorAll:()=>[],addEventListener:(name,fn)=>events[name]=fn},performance:{getEntriesByType:()=>[{name:'https://media.example/chunk.m4s'},{name:'https://media.example/0001.mp4'},{name:'https://media.example/init.mp4'},{name:'https://media.example/movie.m3u8'}]}};
- context.window=context;context.fetch=()=>pending;context.QuannengMedia={postMessage:raw=>messages.push(JSON.parse(raw))};vm.runInNewContext(script,context);return {context,messages,pending};
+ const messages=[],events={};let response;
+ class LocalURL extends URL {static createObjectURL(){return 'blob:https://frame.example/'+Math.random();}static revokeObjectURL(){}}
+ class XHR{addEventListener(event,fn){this.listener=fn;}send(){this.status=200;this.responseURL='https://media.example/unrelated';this.listener();}getResponseHeader(){return 'video/mp4';}}
+ const context={URL:LocalURL,Set,Map,WeakMap,Date,XMLHttpRequest:XHR,location:{href:'https://frame.example/player',hostname:'frame.example'},document:{title:'我的剧 第12集',querySelector:()=>null,querySelectorAll:()=>[],addEventListener:(name,fn)=>events[name]=fn},performance:{getEntriesByType:()=>[{name:'https://media.example/other.mp4'}]}};
+ context.window=context;context.fetch=()=>Promise.resolve(response);context.QuannengMedia={postMessage:raw=>messages.push(JSON.parse(raw))};vm.runInNewContext(script,context);
+ const video=(src)=>({tagName:'VIDEO',currentSrc:src,paused:false,querySelector:()=>null,getAttribute:()=>null});
+ return {context,messages,events,video,fetch:async(url,type='video/mp4')=>{response={ok:true,url,headers:{get:()=>type},blob:async()=>({})};return context.fetch(url);}};
 }
-test('observes extensionless fetch/XHR media without consuming or replacing the response',async()=>{
- const f=fixture();assert.equal(f.context.fetch('anything'),f.pending);new f.context.XMLHttpRequest().send();await Promise.resolve();
- assert.ok(f.messages.some(x=>x.url==='https://media.example/stream?id=1'));
- assert.ok(f.messages.some(x=>x.url==='https://media.example/stream?id=xhr'));
- assert.ok(f.messages.every(x=>x.frame==='https://frame.example/player'));
- assert.ok(!f.messages.some(x=>/chunk\.m4s|0001\.mp4|init\.mp4/.test(x.url || '')));
- const count=f.messages.length;f.context.QuannengMedia.onmessage({data:'scan'});assert.equal(f.messages.length,count);
+test('preloaded sources, page scans and autoplay never export a video',async()=>{
+ const f=fixture();await f.fetch('https://media.example/preload.mp4');new f.context.XMLHttpRequest().send();
+ f.events.play({target:f.video('https://media.example/autoplay.mp4')});f.context.QuannengMedia.onmessage({data:'scan'});assert.equal(f.messages.length,0);
 });
-test('blob is status rather than an unusable native URL, unsafe source is ignored',()=>{
- const f=fixture();f.context.document.querySelectorAll=()=>[{currentSrc:'blob:https://frame.example/123',paused:false,readyState:4,querySelectorAll:()=>[{src:'javascript:alert(1)',type:'video/mp4'}]}];f.context.QuannengMedia.onmessage({data:'scan'});
- assert.ok(f.messages.some(x=>x.kind==='status'&&x.blob&&x.playing));assert.ok(!f.messages.some(x=>x.url?.startsWith('blob:')||x.url?.startsWith('javascript:')));
+test('only the clicked video is exported with title; selecting another replaces the session',async()=>{
+ const f=fixture();f.events.pointerdown({isTrusted:true});const one=f.video('https://media.example/one.mp4');f.events.play({target:one});
+ await f.fetch('https://media.example/unrelated.mp4');
+ assert.deepEqual(f.messages.filter(x=>x.kind==='source').map(x=>x.url),['https://media.example/one.mp4']);
+ assert.equal(f.messages.find(x=>x.kind==='source').title,'我的剧 第12集');
+ f.events.pointerdown({isTrusted:true});f.events.play({target:f.video('https://media.example/two.mp4')});
+ assert.equal(f.messages.filter(x=>x.kind==='activate').length,2);assert.equal(f.messages.at(-2).session,'2');
+});
+test('a selected blob resolves to its own fetched URL, including preloaded blobs',async()=>{
+ const f=fixture();const selected=await f.fetch('https://media.example/stream?id=chosen');const blob=await selected.blob();const src=f.context.URL.createObjectURL(blob);
+ await f.fetch('https://media.example/unrelated.mp4');f.events.pointerdown({isTrusted:true});f.events.play({target:f.video(src)});
+ assert.deepEqual(f.messages.filter(x=>x.kind==='source').map(x=>x.url),['https://media.example/stream?id=chosen']);
+});
+test('MSE request observation is limited to the user playback window and excludes fragments',async()=>{
+ const f=fixture();f.events.pointerdown({isTrusted:true});await f.fetch('https://media.example/manifest','application/vnd.apple.mpegurl');f.events.play({target:f.video('blob:https://frame.example/mse')});
+ await f.fetch('https://media.example/chunk-1.mp4');await f.fetch('https://media.example/1.m4s');
+ assert.deepEqual(f.messages.filter(x=>x.kind==='source').map(x=>x.url),['https://media.example/manifest']);
+ assert.ok(f.messages.some(x=>x.kind==='status'&&x.blob));assert.ok(f.messages.every(x=>x.frame==='https://frame.example/player'));
 });

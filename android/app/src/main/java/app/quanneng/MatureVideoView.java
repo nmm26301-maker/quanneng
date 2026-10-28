@@ -29,6 +29,10 @@ public final class MatureVideoView extends FrameLayout {
     private PlaybackPipeline pipeline;
     private Uri uri;
     private String sourceMime;
+    private String failureDetail="";
+    private java.util.concurrent.Future<?> resolving;
+    private static final java.util.concurrent.ExecutorService RESOLVER=java.util.concurrent.Executors.newFixedThreadPool(2);
+    public String failureDetail(){return failureDetail;}
     private Map<String,String> headers=Collections.emptyMap();
     private IMediaPlayer.OnPreparedListener prepared;
     private IMediaPlayer.OnCompletionListener completion;
@@ -50,7 +54,7 @@ public final class MatureVideoView extends FrameLayout {
     public void setSubtitleSize(int sp){subtitle.setTextSize(Math.max(16,Math.min(32,sp)));}
     public void setSourceMime(String mime){sourceMime=mime;}
     public void setVideoURI(Uri value,Map<String,String> requestHeaders){
-        stopPlayback();uri=value;headers=new HashMap<>(requestHeaders);subtitle.setText("");
+        stopPlayback();failureDetail="";uri=value;headers=new HashMap<>(requestHeaders);subtitle.setText("");
         final Engine player=new Engine(getContext());engine=player;
         player.setCache(false);player.setPreview(true);
         player.setLoadControl(PlaybackPipeline.loadControl(getContext(),"https".equals(value.getScheme())||"http".equals(value.getScheme())));
@@ -67,8 +71,20 @@ public final class MatureVideoView extends FrameLayout {
         player.setOnErrorListener((mp,what,extra)->engine!=player||error!=null&&error.onError(mp,what,extra));
         if(surface.getHolder().getSurface().isValid())player.setDisplay(surface.getHolder());
         player.setDataSource(getContext(),value,headers);
-        try{pipeline=new PlaybackPipeline(getContext(),value,headers);MediaItem.Builder item=new MediaItem.Builder().setUri(value);if(sourceMime!=null&&!sourceMime.isEmpty())item.setMimeType(sourceMime);player.setMediaSource(pipeline.create(item.build()));}catch(java.io.IOException e){if(error!=null)error.onError(player,-1004,0);return;}
-        player.prepareAsync();
+        try{
+            final PlaybackPipeline selected=new PlaybackPipeline(getContext(),value,headers);pipeline=selected;
+            MediaItem.Builder item=new MediaItem.Builder().setUri(value);if(sourceMime!=null&&!sourceMime.isEmpty())item.setMimeType(sourceMime);
+            final MediaItem requested=item.build();
+            resolving=RESOLVER.submit(()->{
+                MediaItem resolved=requested;
+                try{resolved=selected.resolve(requested);}catch(java.io.IOException failure){
+                    if("SOURCE_IS_WEBPAGE".equals(failure.getMessage())){post(()->{if(engine==player){failureDetail="来源返回的是网页或验证页面，请回到原网页点击播放后重新转接。";if(error!=null)error.onError(player,3003,0);}});return;}
+                    // A probe can be rejected by a Range/CDN policy; let Media3 report the real load error.
+                }
+                final MediaItem playable=resolved;
+                post(()->{if(engine!=player)return;sourceMime=playable.localConfiguration.mimeType;player.setMediaSource(selected.create(playable));player.prepareAsync();});
+            });
+        }catch(java.io.IOException e){if(error!=null)error.onError(player,-1004,0);}
     }
     private void fitVideo(){
         if(engine==null||engine.getVideoWidth()<=0||engine.getVideoHeight()<=0||getWidth()<=0||getHeight()<=0)return;
@@ -85,7 +101,7 @@ public final class MatureVideoView extends FrameLayout {
     public boolean isBuffering(){return engine!=null&&engine.player()!=null&&engine.player().getPlaybackState()==Player.STATE_BUFFERING;}
     public String streamingStatus(){boolean local=uri==null||!"https".equals(uri.getScheme())&&!"http".equals(uri.getScheme());return local?"本地视频 · 不消耗网络流量":"已提前缓冲 "+getBufferedAhead()/1000+" 秒 · "+(pipeline!=null&&pipeline.activeProfile==2?"省流量清晰度":"自动清晰度")+"\n"+(pipeline!=null&&pipeline.cacheEnabled?"边播边缓存 · 上限 512 MB":"当前来源不写入磁盘缓存");}
     public void seekTo(int position){if(engine!=null)engine.seekTo(position);}
-    public void stopPlayback(){Engine previous=engine;engine=null;if(previous!=null){previous.release();post(previous::release);}}
+    public void stopPlayback(){if(resolving!=null){resolving.cancel(true);resolving=null;}Engine previous=engine;engine=null;if(previous!=null){previous.release();post(previous::release);}}
     public void addSubtitle(Uri source,String mime){
         if(engine==null||engine.player()==null)return;
         ExoPlayer player=engine.player();long position=player.getCurrentPosition();boolean play=player.getPlayWhenReady();

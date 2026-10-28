@@ -210,7 +210,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void seekExact(int value){jumpTarget=-1;try{if(media!=null)media.seekTo((long)value);else video.seekTo(value);}catch(IllegalStateException error){toast("视频尚未准备好，请稍后重试");}}
     private void clearLoop(){looping=false;updatePoints();}
     private void load(Uri uri,boolean initial){
-        rememberPosition();++mediaEpoch;activeSubtitle=PlaybackHistory.subtitle(this,uri.toString());subtitleStamp="";current=uri;updateEpisodes();initialSeek=false;selectedSpeed=1f;ready=false;failed=false;media=null;jumpTarget=-1;setJumpsEnabled(false);pointA=pointB=0;clearLoop();String mediaName=episodeNames.containsKey(uri.toString())?episodeNames.get(uri.toString()):displayName(uri);title.setText(mediaName);title.setContentDescription(mediaName);overlayTitle.setText(mediaName);position.setText("连接中…");loading.setVisibility(View.VISIBLE);playButton.setEnabled(false);screenLockButton.setEnabled(false);progress.setEnabled(false);progress.setProgress(0);speedButton.setText("1.0×");
+        rememberPosition();++mediaEpoch;activeSubtitle=PlaybackHistory.subtitle(this,uri.toString());subtitleStamp="";current=uri;updateEpisodes();initialSeek=false;selectedSpeed=1f;ready=false;failed=false;media=null;jumpTarget=-1;setJumpsEnabled(false);pointA=pointB=0;clearLoop();String mediaName=episodeNames.containsKey(uri.toString())?episodeNames.get(uri.toString()):(initial&&getIntent().hasExtra("title")?getIntent().getStringExtra("title"):displayName(uri));title.setText(mediaName);title.setContentDescription(mediaName);overlayTitle.setText(mediaName);position.setText("连接中…");loading.setVisibility(View.VISIBLE);playButton.setEnabled(false);screenLockButton.setEnabled(false);progress.setEnabled(false);progress.setProgress(0);speedButton.setText("1.0×");
         HashMap<String,String> headers=new HashMap<>();
         if(initial){try{JSONObject data=new JSONObject(getIntent().getStringExtra("headers")==null?"{}":getIntent().getStringExtra("headers"));Iterator<String> keys=data.keys();while(keys.hasNext()){String k=keys.next();headers.put(k,data.getString(k));}}catch(JSONException ignored){}
             String cookie=getIntent().getStringExtra("cookie");if(cookie!=null)headers.put("Cookie",cookie);
@@ -226,7 +226,8 @@ public final class SystemPlayerActivity extends PrivateActivity {
     }
     private void showFailure(int code){
         if(failed||isFinishing())return;if(touchLocked)setTouchLocked(false);failed=true;ready=false;setJumpsEnabled(false);loading.setVisibility(View.GONE);playButton.setEnabled(false);screenLockButton.setEnabled(false);progress.setEnabled(false);setChrome(true);video.stopPlayback();
-        String reason=code==-1010?"设备不支持此视频编码。":code==-1007?"视频数据格式不正确或文件损坏。":code==-110?"加载超时，请检查网络和链接是否过期。":"视频地址已失效、需要来源授权，或网络连接失败。";
+        String reason=code==3003?"未识别到完整视频数据，可能收到网页、验证页或媒体分片。":code==2004?"来源返回了不支持的响应类型。":code==2005?"来源拒绝播放或地址已过期，请回到原网页重新转接。":code==-1010?"设备不支持此视频编码。":code==-1007?"视频数据格式不正确或文件损坏。":code==-110?"加载超时，请检查网络和链接是否过期。":"视频地址已失效、需要来源授权，或网络连接失败。";
+        if(!video.failureDetail().isEmpty())reason=video.failureDetail();
         if("http".equals(current.getScheme()))reason+=" 请确认发送端仍在共享，且两台设备连接同一 Wi-Fi。";
         position.setText(reason);
         AlertDialog.Builder dialog=new PrivateDialogBuilder(this).setTitle("视频加载失败").setMessage(reason+"\n可以重新加载，或返回原网页重新获取地址。\n诊断代码："+code)

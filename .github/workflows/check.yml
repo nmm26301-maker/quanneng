@@ -32,6 +32,8 @@ jobs:
           java -cp android/build/header-tests PlaybackHeadersCheck
           javac -d android/build/header-tests android/app/src/main/java/app/quanneng/MediaCandidatePolicy.java android/tests/MediaCandidateCheck.java
           java -cp android/build/header-tests MediaCandidateCheck
+          javac -d android/build/header-tests android/app/src/main/java/app/quanneng/MediaCandidatePolicy.java android/app/src/main/java/app/quanneng/MediaProbe.java android/tests/MediaProbeCheck.java
+          java -cp android/build/header-tests MediaProbeCheck
       - name: Prepare Android SDK paths
         shell: bash
         run: |
@@ -114,6 +116,9 @@ jobs:
             adb logcat -d -v brief > "$RUNNER_TEMP/playback-logcat.txt"
             tail -n 180 "$RUNNER_TEMP/playback-logcat.txt"
             grep -q QUANNENG_SMOKE_OK "$RUNNER_TEMP/playback-smoke.txt"
+            timeout 180s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.FormatSmoke | tee "$RUNNER_TEMP/format-smoke.txt"
+            adb logcat -d -v brief > "$RUNNER_TEMP/format-logcat.txt"
+            grep -q QUANNENG_FORMAT_OK "$RUNNER_TEMP/format-smoke.txt"
             timeout 120s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.BrowserSmoke | tee "$RUNNER_TEMP/browser-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/browser-logcat.txt"
             timeout 300s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.TransferSmoke | tee "$RUNNER_TEMP/transfer-smoke.txt"
@@ -140,6 +145,8 @@ jobs:
             ${{ runner.temp }}/streaming-logcat.txt
             ${{ runner.temp }}/playback-smoke.txt
             ${{ runner.temp }}/playback-logcat.txt
+            ${{ runner.temp }}/format-smoke.txt
+            ${{ runner.temp }}/format-logcat.txt
             ${{ runner.temp }}/browser-smoke.txt
             ${{ runner.temp }}/browser-logcat.txt
             ${{ runner.temp }}/security-smoke.txt

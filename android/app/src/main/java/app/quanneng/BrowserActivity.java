@@ -33,6 +33,8 @@ public final class BrowserActivity extends PrivateActivity {
     });
     private boolean advanced,playing,blob,encrypted;
     private int scanId;
+    private String activeFrame="",activeSession="",activeTitle="";
+    private boolean handingOff;
     private final AtomicInteger generation=new AtomicInteger();
 
     @Override public void onCreate(Bundle state){
@@ -58,10 +60,9 @@ public final class BrowserActivity extends PrivateActivity {
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){if(MainActivity.isHttps(request.getUrl().toString()))return false;toast("不支持此链接类型");return true;}
             @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap icon){resetDiscovery();address.setText(url);}
-            @Override public void onLoadResource(WebView view,String url){if(MediaCandidatePolicy.playable(url))collect(url,null,null);}
             @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
                 String u=request.getUrl().toString();if(MainActivity.isHttps(u))requests.put(u,PlaybackHeaders.sanitize(request.getRequestHeaders()));
-                if(MediaCandidatePolicy.playable(u))collect(u,request.getRequestHeaders(),null);return null;
+                return null;
             }
             @Override public void onPageFinished(WebView view,String url){address.setText(url);scan(false);}
         });
@@ -82,8 +83,11 @@ public final class BrowserActivity extends PrivateActivity {
                     JSONObject data=new JSONObject(raw);String frame=data.optString("frame","");
                     if(!sameOrigin(frame,origin))return;
                     if(frames.size()<64||frames.containsKey(frame))frames.put(frame,reply);
-                    if("source".equals(data.optString("kind")))collect(data.optString("url",""),null,frame,data.optString("mime",""));
-                    else if("status".equals(data.optString("kind"))){playing|=data.optBoolean("playing");blob|=data.optBoolean("blob");encrypted|=data.optBoolean("encrypted");updateCount();}
+                    String kind=data.optString("kind"),session=data.optString("session");
+                    if("activate".equals(kind)){
+                        media.clear();contexts.clear();activeFrame=frame;activeSession=session;activeTitle=cleanTitle(data.optString("title"));playing=true;updateCount();
+                    }else if("source".equals(kind)&&frame.equals(activeFrame)&&session.equals(activeSession))collect(data.optString("url",""),null,frame,data.optString("mime",""));
+                    else if("status".equals(kind)&&frame.equals(activeFrame)&&session.equals(activeSession)){playing|=data.optBoolean("playing");blob|=data.optBoolean("blob");encrypted|=data.optBoolean("encrypted");updateCount();}
                 }catch(JSONException ignored){}
             });
             WebViewCompat.addDocumentStartJavaScript(web,script,origins);
@@ -93,10 +97,11 @@ public final class BrowserActivity extends PrivateActivity {
         if(!MainActivity.isHttps(frame))return false;Uri uri=Uri.parse(frame);
         return Objects.equals(uri.getHost(),origin.getHost())&&(uri.getPort()==-1?443:uri.getPort())==(origin.getPort()==-1?443:origin.getPort());
     }
-    private void resetDiscovery(){generation.incrementAndGet();media.clear();contexts.clear();frames.clear();requests.clear();playing=false;blob=false;encrypted=false;scanId++;updateCount();}
+    private void resetDiscovery(){generation.incrementAndGet();media.clear();contexts.clear();frames.clear();requests.clear();playing=false;blob=false;encrypted=false;activeFrame="";activeSession="";activeTitle="";handingOff=false;scanId++;updateCount();}
     private void collect(String url,Map<String,String> requestHeaders,String frame){collect(url,requestHeaders,frame,"");}
     private void collect(String url,Map<String,String> requestHeaders,String frame,String observedMime){
-        if(!MainActivity.isHttps(url)||url.length()>8192)return;
+        if(!MainActivity.isHttps(url)||url.length()>8192||activeFrame.isEmpty()||!Objects.equals(activeFrame,frame))return;
+        String role=MediaCandidatePolicy.role(url);if(role.equals("segment")||role.equals("subtitle"))return;
         final int seenOn=generation.get();
         HashMap<String,String> captured=PlaybackHeaders.sanitize(requestHeaders==null?requests.get(url):requestHeaders);
         runOnUiThread(()->{
@@ -108,36 +113,36 @@ public final class BrowserActivity extends PrivateActivity {
             headers.putAll(captured);String page=frame!=null?frame:old!=null?old.optString("page",web.getUrl()):web.getUrl();
             if(!headers.containsKey("Referer")){String ref=PlaybackHeaders.referrer(page,url);if(!ref.isEmpty())headers.put("Referer",ref);}
             headers.put("User-Agent",web.getSettings().getUserAgentString());String cookie=CookieManager.getInstance().getCookie(url);if(cookie!=null)headers.put("Cookie",cookie);
-            try{JSONObject c=new JSONObject();c.put("url",url);c.put("page",page);String mime=MediaCandidatePolicy.mime(url,observedMime);if(mime.isEmpty()&&old!=null)mime=old.optString("mime","");c.put("mime",mime);c.put("headers",new JSONObject(PlaybackHeaders.sanitize(headers)));contexts.put(url,c);}catch(JSONException ignored){}
+            try{JSONObject c=new JSONObject();c.put("url",url);c.put("page",web.getUrl());c.put("frame",page);c.put("title",activeTitle);String mime=MediaCandidatePolicy.mime(url,observedMime);if(mime.isEmpty()&&old!=null)mime=old.optString("mime","");c.put("mime",mime);c.put("headers",new JSONObject(PlaybackHeaders.sanitize(headers)));contexts.put(url,c);}catch(JSONException ignored){}
             updateCount();
+            int id=++scanId;handler.postDelayed(()->{if(id==scanId&&!handingOff&&!encrypted&&!media.isEmpty())handoff(best());},700);
         });
+    }
+    private String cleanTitle(String value){
+        String title=value==null?"":value.replaceAll("[\\p{Cntrl}]"," ").replaceAll("\\s+"," ").trim();
+        String pageTitle=web.getTitle();if(title.isEmpty()&&pageTitle!=null)title=pageTitle;
+        if(title.isEmpty())title="当前点播视频";
+        return title.substring(0,Math.min(180,title.length()));
     }
     private void updateCount(){
         if(mediaButton==null)return;
-        mediaButton.setText(media.isEmpty()?(playing?"网页正在播放 · 检查可转播地址":"发现视频（0） · 点击检测"):"发现视频（"+media.size()+"） · 转到全能播放");
-        if(note!=null)note.setText(!advanced?"基础检测模式：更新 Android 系统 WebView 可增强嵌入视频识别。":encrypted?"页面使用受保护媒体；可留在原网页观看，独立转播可能不可用。":media.isEmpty()&&playing?"已确认网页播放。尚未取得独立地址；部分媒体只能在原网页播放。":"播放后会自动发现地址，支持嵌入页面与动态媒体请求。点击上方按钮选择转播。");
+        mediaButton.setText(media.isEmpty()?"请在网页中点播放":"转到全能 · "+activeTitle);
+        if(note!=null)note.setText(!advanced?"请先更新 Android 系统 WebView，才能识别你点播的视频。":encrypted?"此视频使用受保护媒体，请继续在原网页观看。":media.isEmpty()?(playing?"正在识别当前点播视频…暂未取得可独立播放的地址。":"点播放后自动识别当前视频，取得地址后转到全能。"):"已备注："+activeTitle+" · "+Uri.parse(web.getUrl()).getHost());
     }
     private void scan(boolean show){
         for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("scan");}catch(RuntimeException ignored){}
-        // Older WebViews retain direct-source and same-origin iframe detection.
-        web.evaluateJavascript("JSON.stringify((function walk(w){let a=[];try{w.document.querySelectorAll('video,video source').forEach(v=>{let u=v.currentSrc||v.src;if(u&&u.startsWith('https://'))a.push(u)});for(let i=0;i<w.frames.length;i++)a=a.concat(walk(w.frames[i]));}catch(e){}return a;})(window))",value->{
-            try{Object decoded=new JSONTokener(value).nextValue();if(decoded instanceof String){JSONArray urls=new JSONArray((String)decoded);for(int i=0;i<Math.min(100,urls.length());i++)collect(urls.getString(i),null,null);}}catch(Exception ignored){}
-        });
-        if(show){int id=++scanId;handler.postDelayed(()->{if(id==scanId&&!isFinishing())showChoices();},600);}
+        if(show){if(!media.isEmpty())handoff(best());else toast(encrypted?"受保护媒体请在原网页观看":"请先在网页中点播放；只识别你当前点播的视频");}
     }
-    private void showChoices(){
-        if(media.isEmpty()){
-            String message=encrypted?"网页正在使用受保护媒体，无法作为普通视频地址转播。可继续在网页观看。":playing||blob?"已确认网页视频加载，但暂未取得可独立播放的地址。可以继续在网页观看；这类媒体不保证能转到原生播放器。":"尚未发现视频请求。请先点击网页中的播放按钮，再检测。";
-            new PrivateDialogBuilder(this).setTitle("暂未取得转播地址").setMessage(message).setPositiveButton("继续网页播放",null).show();return;
-        }
-        final ArrayList<String> choices=new ArrayList<>(media);choices.sort(Comparator.comparingInt(u->MediaCandidatePolicy.priority(u,contexts.containsKey(u)?contexts.get(u).optString("mime",""):"")));
-        String[] names=new String[choices.size()];for(int i=0;i<names.length;i++){String u=choices.get(i);names[i]=(i+1)+" · "+(MediaCandidatePolicy.mime(u,contexts.containsKey(u)?contexts.get(u).optString("mime",""):"").contains("mpegurl")?"HLS":MediaCandidatePolicy.role(u).equals("dash")?"DASH":"视频")+"\n"+(u.length()>130?u.substring(0,130)+"…":u);}
-        new PrivateDialogBuilder(this).setTitle("在全能中播放").setItems(names,(dialog,index)->{
-            String value=choices.get(index);JSONObject context=contexts.get(value);
-            Intent intent=new Intent(this,MainActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,value).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            if(context!=null)intent.putExtra("mediaContext",context.toString());
-            web.loadUrl("about:blank");startActivity(intent);finish();
-        }).setNegativeButton("取消",null).show();
+    private String best(){
+        return Collections.min(media,Comparator.comparingInt(u->MediaCandidatePolicy.priority(u,contexts.containsKey(u)?contexts.get(u).optString("mime",""):"")));
+    }
+    private void handoff(String value){
+        if(handingOff||encrypted||!privateReady()||isFinishing())return;
+        handingOff=true;JSONObject context=contexts.get(value);
+        Intent intent=new Intent(this,MainActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,value).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if(context!=null)intent.putExtra("mediaContext",context.toString());
+        for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("pause");}catch(RuntimeException ignored){}
+        web.loadUrl("about:blank");startActivity(intent);finish();
     }
     private void hideCustomView(){if(customView==null)return;root.removeView(customView);customView=null;content.setVisibility(View.VISIBLE);getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);WebChromeClient.CustomViewCallback callback=customCallback;customCallback=null;if(callback!=null)callback.onCustomViewHidden();}
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}

@@ -112,6 +112,22 @@ final class PlaybackPipeline {
             long delay=super.getRetryDelayMsFor(info);return delay==C.TIME_UNSET?delay:Math.max(500,delay);
         }
     }
+    /** Called off the UI thread. Probe only the first 8 KiB through the same authenticated upstream. */
+    MediaItem resolve(MediaItem item)throws IOException{
+        Uri uri=item.localConfiguration.uri;
+        if(!"https".equalsIgnoreCase(uri.getScheme())&&!"http".equalsIgnoreCase(uri.getScheme()))return item;
+        DataSource source=upstream.createDataSource();
+        try{
+            source.open(new DataSpec.Builder().setUri(uri).setLength(8192).build());
+            byte[] bytes=new byte[8192];int count=0,read;
+            while(count<bytes.length&&(read=source.read(bytes,count,bytes.length-count))!=-1){if(read==0)break;count+=read;}
+            String type="";
+            for(Map.Entry<String,List<String>> entry:source.getResponseHeaders().entrySet())if(entry.getKey()!=null&&entry.getKey().equalsIgnoreCase("Content-Type")&&!entry.getValue().isEmpty())type=entry.getValue().get(0);
+            String mime=MediaProbe.mime(bytes,count,type,source.getUri()==null?uri.toString():source.getUri().toString(),item.localConfiguration.mimeType);
+            if("text/html".equals(mime))throw new IOException("SOURCE_IS_WEBPAGE");
+            return item.buildUpon().setMimeType(mime).build();
+        }finally{source.close();}
+    }
     /** 清单、直播刷新、AES 密钥和外置字幕始终走上游，仅媒体分片与初始化段进入缓存。 */
     MediaSource create(MediaItem item){
         MediaItem bare=item.buildUpon().setSubtitleConfigurations(Collections.emptyList()).build();

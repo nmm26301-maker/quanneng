@@ -153,11 +153,12 @@ public final class MainActivity extends PrivateActivity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent); setIntent(intent);whenUnlocked(()->{receiveIntent(intent);deliverPendingUrl();});
     }
+    private JSONObject pendingMedia;
     private void deliverPendingUrl() {
         if (pendingUrl == null || !trusted()) return;
         String value = pendingUrl;
-        web.evaluateJavascript("typeof window.quannengOpenURL==='function'?(window.quannengOpenURL("+JSONObject.quote(value)+"),true):false", result->{
-            if ("true".equals(result) && value.equals(pendingUrl)) pendingUrl=null;
+        web.evaluateJavascript("typeof window.quannengOpenURL==='function'?(window.quannengOpenURL("+JSONObject.quote(value)+","+(pendingMedia==null?"null":pendingMedia.toString())+"),true):false", result->{
+            if ("true".equals(result) && value.equals(pendingUrl)){pendingUrl=null;pendingMedia=null;}
         });
     }
     private void receiveIntent(Intent intent) {
@@ -176,7 +177,10 @@ public final class MainActivity extends PrivateActivity {
                 java.util.regex.Matcher m = java.util.regex.Pattern.compile("https://[^\\s<>\\\"]+").matcher(text);
                 if (m.find()) {
                     String url=m.group();
-                    if(java.util.regex.Pattern.compile("(?i)\\.(mp4|m3u8|mpd|webm|m4v|mov|mkv)(?:[?#]|$)").matcher(url).find()) {
+                    if(mediaContexts.containsKey(url)){
+                        JSONObject c=mediaContexts.get(url);pendingUrl=url;pendingMedia=new JSONObject();
+                        try{pendingMedia.put("name",c.optString("title","当前点播视频"));pendingMedia.put("sourcePage",c.optString("page",""));pendingMedia.put("mime",c.optString("mime",""));pendingMedia.put("forceNative",true);}catch(JSONException ignored){}
+                    }else if(java.util.regex.Pattern.compile("(?i)\\.(mp4|m3u8|mpd|webm|m4v|mov|mkv)(?:[?#]|$)").matcher(url).find()) {
                         try {launchMedia(new JSONObject().put("url",url));} catch(JSONException ignored) {}
                     } else pendingUrl=url;
                 }
@@ -238,6 +242,13 @@ public final class MainActivity extends PrivateActivity {
         JSONObject context=mediaContexts.get(url);
         Intent intent=new Intent(this,SystemPlayerActivity.class).setData(Uri.parse(url));
         intent.putExtra("seriesName",request.optString("seriesName",""));
+        intent.putExtra("title",request.optString("name",context==null?"网络视频":context.optString("title","网络视频")));
+        String savedPage=request.optString("sourcePage","");
+        if(context==null&&isHttps(savedPage)){
+            intent.putExtra("sourcePage",savedPage);String ref=PlaybackHeaders.referrer(savedPage,url);
+            JSONObject h=new JSONObject();if(!ref.isEmpty())h.put("Referer",ref);intent.putExtra("headers",h.toString());
+            intent.putExtra("mime",MediaCandidatePolicy.mime(url,request.optString("mime","")));
+        }
         if(context!=null){intent.putExtra("headers",context.optJSONObject("headers")==null?"{}":context.optJSONObject("headers").toString());intent.putExtra("sourcePage",context.optString("page",""));intent.putExtra("mime",context.optString("mime",""));}
         String cookie=android.webkit.CookieManager.getInstance().getCookie(url);
         if(cookie!=null)intent.putExtra("cookie",cookie);
