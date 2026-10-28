@@ -46,6 +46,7 @@ public final class TransferActivity extends PrivateActivity {
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setMax(100);root.addView(progress,new LinearLayout.LayoutParams(-1,dp(28)));tasks=new LinearLayout(this);tasks.setOrientation(1);root.addView(tasks);cancel=button(root,"暂停当前任务",false);cancel.setOnClickListener(v->TransferService.cancel());
         error=text(root,"",13,0xffff9ba7,10);text(root,"已完成",18,PlayerUi.TEXT,28);text(root,"保留在全能本机私人空间，可播放或另存到手机。",13,PlayerUi.MUTED,4);history=new LinearLayout(this);history.setOrientation(1);root.addView(history);
         if(state!=null){url.setText(state.getString("url",""));startTime.setText(state.getString("start",""));endTime.setText(state.getString("end",""));formError=state.getString("formError","");}
+        String postUrl=getIntent().getStringExtra("postUrl");if(MainActivity.isHttps(postUrl)){url.setText(postUrl);status.setText("已接收帖子链接；点“下载到私人空间”，完成后可直接播放");}
         handler.post(refresh);
     }
     private void showError(String value){formError=value;error.setText(value);}
