@@ -54,3 +54,5 @@
 - 增加真实 HTTP 源 + Media3 解码检查：无后缀且错误 MIME 的 HLS/DASH、错误 m3u8 后缀的 MP4、拒绝 Range 的 MP4/HLS、伪装为 MP4 的 HTML。网页回归实际触摸跨域 iframe 播放，检查预加载/自动播放不导出、只转接选中的 Blob、名称和来源持久化。
 
 HLS MIME regression: Media3 1.10.1 uses the canonical `application/x-mpegURL` constant in its adaptive source switch. The prior custom factory passed common website aliases (`application/vnd.apple.mpegurl`, lowercase `application/x-mpegurl`) directly into that switch, selecting a progressive file source and producing 3003 for valid HLS. The factory now explicitly maps normalized HLS aliases to `CONTENT_TYPE_HLS`, including after response probing and when restoring subtitle sources. FormatSmoke and the public HLS decode test exercise this boundary.
+
+自动转接同时由原生 WebView 的真实触摸/播放按键时刻校验，网页伪造 activate/source 消息不能在未点播时触发转接；原生手势通知也覆盖跨域嵌入播放器。加密媒体事件保留原网页观看。

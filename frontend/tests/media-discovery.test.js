@@ -14,7 +14,7 @@ function fixture(){
 }
 test('preloaded sources, page scans and autoplay never export a video',async()=>{
  const f=fixture();await f.fetch('https://media.example/preload.mp4');new f.context.XMLHttpRequest().send();
- f.events.play({target:f.video('https://media.example/autoplay.mp4')});f.context.QuannengMedia.onmessage({data:'scan'});assert.equal(f.messages.length,0);
+ f.events.play({target:f.video('https://media.example/autoplay.mp4')});f.context.QuannengMedia.onmessage({data:'scan'});assert.equal(f.messages.filter(x=>x.kind!=='ready').length,0);
 });
 test('only the clicked video is exported with title; selecting another replaces the session',async()=>{
  const f=fixture();f.events.pointerdown({isTrusted:true});const one=f.video('https://media.example/one.mp4');f.events.play({target:one});
@@ -34,4 +34,9 @@ test('MSE request observation is limited to the user playback window and exclude
  await f.fetch('https://media.example/chunk-1.mp4');await f.fetch('https://media.example/1.m4s');
  assert.deepEqual(f.messages.filter(x=>x.kind==='source').map(x=>x.url),['https://media.example/manifest']);
  assert.ok(f.messages.some(x=>x.kind==='status'&&x.blob));assert.ok(f.messages.every(x=>x.frame==='https://frame.example/player'));
+});
+
+test('native user gesture arms embedded playback and encrypted events are explicit',()=>{
+ const f=fixture();f.context.QuannengMedia.onmessage({data:'gesture'});const video=f.video('https://media.example/12.mp4');f.events.play({target:video});f.events.encrypted({target:video});
+ assert.equal(f.messages.filter(x=>x.kind==='source').length,1);assert.ok(f.messages.some(x=>x.kind==='status'&&x.encrypted));
 });

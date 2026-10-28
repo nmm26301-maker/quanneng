@@ -44,7 +44,7 @@
     const src = active.currentSrc || active.src || '';
     if (src.startsWith('blob:') && !objects.has(src)) recent.forEach(value => candidate(value.url, value.type));
   }, true);
-  ['loadedmetadata', 'playing', 'encrypted'].forEach(event => document.addEventListener(event, e => { if (e.target === active) scan(); }, true));
+  ['loadedmetadata', 'playing', 'encrypted'].forEach(event => document.addEventListener(event, e => { if (e.target === active) {if (event === 'encrypted') report({kind: 'status', encrypted: true});scan();} }, true));
   if (window.fetch) {
     const original = window.fetch;
     window.fetch = function(...args) {
@@ -68,5 +68,6 @@
   if (create) URL.createObjectURL = function(value) {const url = create.call(this, value), info = blobs.get(value);if (info) {if (objects.size >= 100) objects.delete(objects.keys().next().value);objects.set(url, info);}return url;};
   const revoke = URL.revokeObjectURL;
   if (revoke) URL.revokeObjectURL = function(value) {objects.delete(value);return revoke.call(this, value);};
-  try {window.QuannengMedia.onmessage = event => {if (event.data === 'scan') scan();else if (event.data === 'pause') document.querySelectorAll('video').forEach(video => video.pause());};} catch {}
+  report({kind: 'ready'});
+  try {window.QuannengMedia.onmessage = event => {if (event.data === 'gesture') {gesture = Date.now();recent.length = 0;}else if (event.data === 'scan') scan();else if (event.data === 'pause') document.querySelectorAll('video').forEach(video => video.pause());};} catch {}
 })();

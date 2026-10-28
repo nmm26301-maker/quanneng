@@ -40,6 +40,7 @@ public final class BrowserSmoke extends Instrumentation {
                 });web.loadUrl("https://page.fixture.test/index?ready=1");
             });
             await(web,"!!document.querySelector('iframe')");SystemClock.sleep(2000);
+            js(web,"window.QuannengMedia.postMessage(JSON.stringify({kind:'activate',frame:location.href,session:'forged',title:'forged'}));window.QuannengMedia.postMessage(JSON.stringify({kind:'source',frame:location.href,session:'forged',url:'https://media.fixture.test/stream?id=forged',mime:'video/mp4'}));true");SystemClock.sleep(300);
             if(count(browser)!=0)throw new AssertionError("Preloads/autoplay exported before the user's play gesture");
             AtomicReference<Intent> handed=new AtomicReference<>();
             ActivityMonitor handoff=new ActivityMonitor(){@Override public ActivityResult onStartActivity(Intent intent){if(Intent.ACTION_SEND.equals(intent.getAction())&&intent.hasExtra("mediaContext")){handed.set(new Intent(intent));return new ActivityResult(Activity.RESULT_CANCELED,null);}return null;}};

@@ -35,6 +35,7 @@ public final class BrowserActivity extends PrivateActivity {
     private int scanId;
     private String activeFrame="",activeSession="",activeTitle="";
     private boolean handingOff;
+    private long webGestureAt=-60000;
     private final AtomicInteger generation=new AtomicInteger();
 
     @Override public void onCreate(Bundle state){
@@ -84,8 +85,8 @@ public final class BrowserActivity extends PrivateActivity {
                     if(!sameOrigin(frame,origin))return;
                     if(frames.size()<64||frames.containsKey(frame))frames.put(frame,reply);
                     String kind=data.optString("kind"),session=data.optString("session");
-                    if("activate".equals(kind)){
-                        media.clear();contexts.clear();activeFrame=frame;activeSession=session;activeTitle=cleanTitle(data.optString("title"),frame);playing=true;updateCount();
+                    if("activate".equals(kind)&&SystemClock.elapsedRealtime()-webGestureAt<15000){
+                        media.clear();contexts.clear();activeFrame=frame;activeSession=session;activeTitle=cleanTitle(data.optString("title"),frame);playing=true;blob=false;encrypted=false;scanId++;updateCount();
                     }else if("source".equals(kind)&&frame.equals(activeFrame)&&session.equals(activeSession))collect(data.optString("url",""),null,frame,data.optString("mime",""),data.optBoolean("direct"));
                     else if("status".equals(kind)&&frame.equals(activeFrame)&&session.equals(activeSession)){playing|=data.optBoolean("playing");blob|=data.optBoolean("blob");encrypted|=data.optBoolean("encrypted");updateCount();}
                 }catch(JSONException ignored){}
@@ -93,11 +94,26 @@ public final class BrowserActivity extends PrivateActivity {
             WebViewCompat.addDocumentStartJavaScript(web,script,origins);
         }catch(IOException|RuntimeException error){advanced=false;}
     }
+    @Override public boolean dispatchTouchEvent(MotionEvent event){
+        if(event.getActionMasked()==MotionEvent.ACTION_DOWN&&web!=null&&privateReady()){
+            android.graphics.Rect bounds=new android.graphics.Rect();
+            if(customView!=null||web.getGlobalVisibleRect(bounds)&&bounds.contains((int)event.getRawX(),(int)event.getRawY()))armWebGesture();
+        }
+        return super.dispatchTouchEvent(event);
+    }
+    @Override public boolean dispatchKeyEvent(KeyEvent event){
+        if(event.getAction()==KeyEvent.ACTION_DOWN&&web!=null&&web.hasFocus()&&privateReady()&&(event.getKeyCode()==KeyEvent.KEYCODE_ENTER||event.getKeyCode()==KeyEvent.KEYCODE_SPACE||event.getKeyCode()==KeyEvent.KEYCODE_DPAD_CENTER))armWebGesture();
+        return super.dispatchKeyEvent(event);
+    }
+    private void armWebGesture(){
+        webGestureAt=SystemClock.elapsedRealtime();
+        for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("gesture");}catch(RuntimeException ignored){}
+    }
     private static boolean sameOrigin(String frame,Uri origin){
         if(!MainActivity.isHttps(frame))return false;Uri uri=Uri.parse(frame);
         return Objects.equals(uri.getHost(),origin.getHost())&&(uri.getPort()==-1?443:uri.getPort())==(origin.getPort()==-1?443:origin.getPort());
     }
-    private void resetDiscovery(){generation.incrementAndGet();media.clear();contexts.clear();frames.clear();requests.clear();playing=false;blob=false;encrypted=false;activeFrame="";activeSession="";activeTitle="";handingOff=false;scanId++;updateCount();}
+    private void resetDiscovery(){generation.incrementAndGet();media.clear();contexts.clear();frames.clear();requests.clear();playing=false;blob=false;encrypted=false;activeFrame="";activeSession="";activeTitle="";handingOff=false;webGestureAt=-60000;scanId++;updateCount();}
     private void collect(String url,Map<String,String> requestHeaders,String frame,String observedMime,boolean direct){
         if(!MainActivity.isHttps(url)||url.length()>8192||activeFrame.isEmpty()||!Objects.equals(activeFrame,frame))return;
         if(!MediaCandidatePolicy.exportable(url,direct))return;
