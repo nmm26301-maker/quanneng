@@ -65,7 +65,7 @@ public final class BrowserSmoke extends Instrumentation {
             await(web,"document.querySelector('#poster').complete&&document.querySelector('#poster').naturalWidth>0");
             if(!deferred.get()||images.get()==0)throw new AssertionError("Fast loading did not defer then restore image resources");
             if(!"true".equals(js(web,"window.returnMarker='same-page';document.querySelector('#return-value').value='第12集保留';true")))throw new AssertionError("Cannot set return marker");
-            int loadsBefore=pageLoads.get();String originalUrl=web.getUrl();
+            int loadsBefore=pageLoads.get();String originalUrl=js(web,"location.href");
             ActivityMonitor playerMonitor=addMonitor("app.quanneng.SystemPlayerActivity",null,false);tap(browser.findViewById(1401));
             Activity player=waitForMonitorWithTimeout(playerMonitor,15000);removeMonitor(playerMonitor);
             if(player==null)throw new AssertionError("Explicit transfer button did not launch player");PrivateTestAccess.awaitUnlocked(this,player);
@@ -74,7 +74,7 @@ public final class BrowserSmoke extends Instrumentation {
             awaitNative(player,false);
             runOnMainSync(()->{Object video=player.findViewById(1000);try{int duration=((Number)video.getClass().getMethod("getDuration").invoke(video)).intValue();video.getClass().getMethod("seekTo",int.class).invoke(video,duration-700);video.getClass().getMethod("start").invoke(video);}catch(Exception e){throw new RuntimeException(e);}});
             awaitNative(player,true);pressBack();awaitBrowser(browser);
-            if(browser.isFinishing()||field(browser,"web")!=web||!originalUrl.equals(web.getUrl())||pageLoads.get()!=loadsBefore)throw new AssertionError("Back recreated, navigated or reloaded the original web page");
+            if(browser.isFinishing()||field(browser,"web")!=web||!originalUrl.equals(js(web,"location.href"))||pageLoads.get()!=loadsBefore)throw new AssertionError("Back recreated, navigated or reloaded the original web page");
             await(web,"window.returnMarker==='same-page'&&document.querySelector('#return-value').value==='第12集保留'");
             SystemClock.sleep(1000);if(nativeStarts.get()!=1)throw new AssertionError("Returning to browser transferred again without a click");
             // Error fallback must return to this existing page too.
@@ -88,7 +88,7 @@ public final class BrowserSmoke extends Instrumentation {
                 if(!returned)SystemClock.sleep(100);
             }
             if(!returned)throw new AssertionError("Error dialog did not offer return to existing page");awaitBrowser(browser);
-            if(!originalUrl.equals(web.getUrl())||pageLoads.get()!=loadsBefore)throw new AssertionError("Error return lost the page");
+            if(!originalUrl.equals(js(web,"location.href"))||pageLoads.get()!=loadsBefore)throw new AssertionError("Error return lost the page");
             runOnMainSync(()->browser.findViewById(1410).performClick());
             if(getTargetContext().getSharedPreferences("browser",0).getBoolean("fast-loading",true))throw new AssertionError("Fast mode setting not persisted");
             runOnMainSync(()->browser.findViewById(1410).performClick());runOnMainSync(browser::finish);SystemClock.sleep(200);
