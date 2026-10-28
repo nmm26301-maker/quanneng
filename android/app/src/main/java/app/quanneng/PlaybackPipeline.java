@@ -69,7 +69,7 @@ final class PlaybackPipeline {
         if(cache==null){
             File directory=new File(c.getCacheDir(),"streaming-v1");
             if(!directory.isDirectory()&&!directory.mkdirs())throw new IOException("无法创建视频缓存");
-            SimpleCache created=new SimpleCache(directory,new NoOpCacheEvictor(),new StandaloneDatabaseProvider(c.getApplicationContext()));
+            SimpleCache created=new SimpleCache(directory,new LeastRecentlyUsedCacheEvictor(CACHE_LIMIT),new StandaloneDatabaseProvider(c.getApplicationContext()));
             try{created.checkInitialization();cache=created;}catch(IOException error){created.release();throw error;}
         }
         return cache;
