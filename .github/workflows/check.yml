@@ -54,6 +54,13 @@ jobs:
             ${{ runner.temp }}/quanneng-sdk/android-15/apksigner
             ${{ runner.temp }}/quanneng-sdk/android-15/lib/
           retention-days: 1
+      - name: Build arm64 release candidate
+        run: python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-arm64-candidate.apk" --abi arm64-v8a --development-signing
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Quanneng-arm64-candidate
+          path: ${{ runner.temp }}/Quanneng-arm64-candidate.apk
+          retention-days: 1
       - name: Check bounded local media endpoint
         run: |
           mkdir -p android/build/range-tests
@@ -168,12 +175,3 @@ jobs:
             ${{ runner.temp }}/share-smoke.txt
             ${{ runner.temp }}/share-logcat.txt
           if-no-files-found: ignore
-      - name: Build arm64 release candidate after checks
-        if: success()
-        run: python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-arm64-candidate.apk" --abi arm64-v8a --development-signing
-      - uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: Quanneng-arm64-candidate
-          path: ${{ runner.temp }}/Quanneng-arm64-candidate.apk
-          retention-days: 1
