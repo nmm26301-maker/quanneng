@@ -48,6 +48,13 @@ public final class BrowserSmoke extends Instrumentation {
             await(web,"!!document.querySelector('iframe')");SystemClock.sleep(2000);
             js(web,"window.QuannengMedia.postMessage(JSON.stringify({kind:'activate',frame:location.href,session:'forged',title:'forged'}));window.QuannengMedia.postMessage(JSON.stringify({kind:'source',frame:location.href,session:'forged',url:'https://media.fixture.test/stream?id=forged',mime:'video/mp4'}));true");SystemClock.sleep(300);
             if(count(browser)!=0)throw new AssertionError("Preloads/autoplay exported before the user's play gesture");
+            ActivityMonitor postMonitor=addMonitor("app.quanneng.TransferActivity",null,false);
+            runOnMainSync(()->browser.findViewById(1420).performClick());
+            Activity post=waitForMonitorWithTimeout(postMonitor,10000);removeMonitor(postMonitor);
+            if(post==null)throw new AssertionError("Post video fallback did not open download screen");PrivateTestAccess.awaitUnlocked(this,post);
+            if(!"https://page.fixture.test/index?ready=1".equals(((android.widget.EditText)post.findViewById(1600)).getText().toString()))throw new AssertionError("Post URL not handed to download screen");
+            runOnMainSync(post::finish);awaitBrowser(browser);
+
             AtomicReference<Intent> handed=new AtomicReference<>();AtomicInteger nativeStarts=new AtomicInteger();
             ActivityMonitor handoff=new ActivityMonitor(){@Override public ActivityResult onStartActivity(Intent intent){
                 if(intent.getComponent()!=null&&"app.quanneng.SystemPlayerActivity".equals(intent.getComponent().getClassName())){
