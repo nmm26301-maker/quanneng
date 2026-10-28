@@ -1,6 +1,6 @@
 # 全能新版安装与签名恢复
 
-v0.4.0 安装后显示“全能新版”，独立应用 ID 为 `app.quanneng.next`，可与旧版 `app.quanneng` 共存。请保留旧版安装和数据，保险箱及私有记录继续在旧版使用；普通视频可在新版重新选择。本版包含 v0.3.2 的透明横屏控制、按秒拖动、防误触锁定、按需显示的时钟和系统解锁。
+v0.4.1 安装后显示“全能新版”，独立应用 ID 为 `app.quanneng.next`，可与旧版 `app.quanneng` 共存。请保留旧版安装和数据，保险箱及私有记录继续在旧版使用；普通视频可在新版重新选择。本版包含 v0.3.2 的透明横屏控制、按秒拖动、防误触锁定、按需显示的时钟和系统解锁。
 
 ## 固定发布签名
 
@@ -39,3 +39,11 @@ python3 android/tools/restore-signing.py --password-file /private/QuannengNext-s
 ## 并存与更新检查
 
 CI 使用单独签名的旧应用标识测试夹具（`app.quanneng`，并占用旧媒体 authority）和新版同时安装。检查两者 UID 与私有数据互相独立，再对新版执行 `adb install -r` 原地重装，验证旧夹具加密标记、新版私有设置和 Android Keystore 加密密钥仍可使用。测试夹具不是用户的真实旧版或用户数据；正式 APK 另校验证书指纹、包名及 provider authority。
+
+## v0.4.1 发布验证
+
+- 应用 ID `app.quanneng.next`，版本号 `0.4.1`，versionCode `13`，正式 arm64-v8a 包继续使用上述固定发布证书，可作为 v0.4.0 的覆盖更新；不替换旧 `app.quanneng`。
+- APK 大小 60,387,574 字节，SHA-256 `add41f53010324e39f9876f1fd38a159ff8c8495b9a73af28c47b322aa180e43`。
+- [Android 35 回归](https://github.com/nmm26301-maker/quanneng/actions/runs/40608287566) 全部通过，代码提交 `2ab105ce39c4d3acf807d4150b30d092cd5c69cc`。18 项前端测试、签名守卫、并存/私有状态保留、系统解锁与原有功能检查通过。
+- 新增实测：限速与一次连接中断后继续解码、关闭上游后的缓存重播及拖动、实际 VTT 字幕显示、同剧选集/上下集边界、真实播完自动下一集及关闭连播、单视频隐藏选集。
+- 回归使用模拟器和合成数据源；真实公网 HLS/DASH/MP4 另有播放检查，不等同于所有源站、机型和真实 Wi-Fi 条件。更多使用范围见 [流畅播放与剧集](STREAMING.md)。
