@@ -43,6 +43,7 @@ final class PlaybackPipeline {
     private static final java.util.concurrent.ExecutorService PREFETCH=java.util.concurrent.Executors.newCachedThreadPool(r->{Thread t=new Thread(r,"quanneng-prefetch");t.setDaemon(true);return t;});
     private final DataSource.Factory upstream,media;
     private final String cacheIdentity;
+    private final Set<String> sessionKeys=java.util.concurrent.ConcurrentHashMap.newKeySet();
     private java.util.concurrent.Future<?> prefetchTask;
     final boolean cacheEnabled;
     final int activeProfile;
@@ -52,7 +53,7 @@ final class PlaybackPipeline {
         String auth=null;for(Map.Entry<String,String> h:headers.entrySet())if(h.getKey().equalsIgnoreCase("Authorization"))auth=h.getValue();
         if(auth!=null){final String credential=auth;final java.net.URL origin=NetworkPolicy.url(uri.toString());requests=()->new NasDataSource(origin,credential);}
         upstream=new DefaultDataSource.Factory(context,requests);
-        cacheIdentity=new TreeMap<>(headers).toString();media=cacheFactory(context,uri,headers,upstream);cacheEnabled=media!=upstream;
+        cacheIdentity=new TreeMap<>(headers).toString();media=cacheFactory(context,uri,headers,upstream,sessionKeys);cacheEnabled=media!=upstream;
     }
     private static SharedPreferences prefs(Context c){return c.getSharedPreferences("streaming",Context.MODE_PRIVATE);}
     static int profile(Context c){return Math.max(0,Math.min(2,prefs(c).getInt("profile",1)));}
@@ -75,11 +76,14 @@ final class PlaybackPipeline {
     }
     /** 工厂参数便于不同网络实现共用同一缓存，拒绝将 URL 或请求上下文明文用作索引键。 */
     static DataSource.Factory cacheFactory(Context c,Uri uri,Map<String,String> headers,DataSource.Factory source){
+        return cacheFactory(c,uri,headers,source,null);
+    }
+    private static DataSource.Factory cacheFactory(Context c,Uri uri,Map<String,String> headers,DataSource.Factory source,Set<String> keys){
         if(!cacheSelected(c)||!cacheEligible(uri,headers))return source;
         try{
             final String identity=new TreeMap<>(headers).toString();
             return new CacheDataSource.Factory().setCache(cache(c)).setUpstreamDataSourceFactory(source)
-                .setCacheKeyFactory(spec->cacheKey(spec,identity)).setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
+                .setCacheKeyFactory(spec->{String key=cacheKey(spec,identity);if(keys!=null)keys.add(key);return key;}).setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
         }catch(IOException|RuntimeException unavailable){android.util.Log.w("Quanneng","视频缓存不可用，回退网络播放");return source;}
     }
     static String cacheKey(DataSpec spec,String identity){
@@ -103,9 +107,11 @@ final class PlaybackPipeline {
     void completed(Uri uri){
         if(!cacheEnabled)return;
         java.util.concurrent.Future<?> pending; synchronized(this){pending=prefetchTask;stopPrefetch();}
-        String key=cacheKey(new DataSpec.Builder().setUri(uri).build(),cacheIdentity);
         PREFETCH.execute(()->{if(pending!=null)try{pending.get(20,TimeUnit.SECONDS);}catch(Exception ignored){}
-            try{cache.removeResource(key);}catch(RuntimeException ignored){}});
+            sessionKeys.add(cacheKey(new DataSpec.Builder().setUri(uri).build(),cacheIdentity));
+            for(String key:new HashSet<>(sessionKeys))for(int attempt=0;attempt<5;attempt++)try{cache.removeResource(key);break;}catch(RuntimeException busy){
+                try{Thread.sleep(500);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();return;}
+            }});
     }
     static DefaultLoadControl loadControl(Context c,boolean network){
         if(!network)return new DefaultLoadControl();
