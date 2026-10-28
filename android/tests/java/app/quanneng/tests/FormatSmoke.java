@@ -23,7 +23,7 @@ public final class FormatSmoke extends Instrumentation {
             for(NetworkInterface n:Collections.list(NetworkInterface.getNetworkInterfaces()))for(InetAddress a:Collections.list(n.getInetAddresses()))if(a instanceof Inet4Address&&a.isSiteLocalAddress())host=a.getHostAddress();
             if(host==null)throw new AssertionError("No private interface for local HTTP fixture");base="http://"+host+":"+server.getLocalPort();
             workers.submit(()->{while(!server.isClosed())try{Socket client=server.accept();workers.submit(()->serve(client));}catch(IOException ignored){}});
-            for(String path:new String[]{"/watch?kind=hls","/watch?kind=dash","/wrong.m3u8","/no-range"}){
+            for(String path:new String[]{"/watch?kind=hls","/watch?kind=dash","/wrong.m3u8","/no-range","/no-range-hls"}){
                 Activity a=open(path);long deadline=SystemClock.elapsedRealtime()+30000;boolean decoded=false;
                 while(SystemClock.elapsedRealtime()<deadline){AtomicReference<Boolean> good=new AtomicReference<>(false);runOnMainSync(()->{try{Object media=field(a,"media");Object video=a.findViewById(1000);good.set(media!=null&&((Number)media.getClass().getMethod("getVideoWidth").invoke(media)).intValue()>0&&((Number)video.getClass().getMethod("getCurrentPosition").invoke(video)).intValue()>200);}catch(Exception ignored){}});if(good.get()){decoded=true;break;}SystemClock.sleep(100);}
                 runOnMainSync(a::finish);if(!decoded)throw new AssertionError("No decoded frames for "+path);report("Decoded actual HTTP: "+path);
@@ -39,14 +39,14 @@ public final class FormatSmoke extends Instrumentation {
         client.setSoTimeout(8000);BufferedReader in=new BufferedReader(new InputStreamReader(client.getInputStream(),StandardCharsets.US_ASCII));String first=in.readLine();if(first==null)return;String path=first.split(" ")[1],range=null,line;
         while((line=in.readLine())!=null&&!line.isEmpty())if(line.toLowerCase(Locale.ROOT).startsWith("range:"))range=line.substring(6).trim();
         byte[] data;String type="application/octet-stream";
-        if(path.contains("kind=hls")){data=("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:18\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:18.0,\n/episode.ts\n#EXT-X-ENDLIST\n").getBytes(StandardCharsets.UTF_8);type="video/mp4";}
+        if(path.contains("kind=hls")||path.equals("/no-range-hls")){data=("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:18\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:18.0,\n/episode.ts\n#EXT-X-ENDLIST\n").getBytes(StandardCharsets.UTF_8);type="video/mp4";}
         else if(path.equals("/html.mp4")){data="<!doctype html><html><body>Source login page</body></html>".getBytes(StandardCharsets.UTF_8);type="video/mp4";}
         else{
             String asset=path.contains("kind=dash")?"format/episode.mpd":path.equals("/episode.ts")?"format/episode.ts":path.contains(".m4s")?"format/"+path.substring(1):"buffer-fixture.mp4";
             try(InputStream source=getContext().getAssets().open(asset);ByteArrayOutputStream bytes=new ByteArrayOutputStream()){byte[] b=new byte[8192];int count;while((count=source.read(b))!=-1)bytes.write(b,0,count);data=bytes.toByteArray();}
         }
         OutputStream out=client.getOutputStream();
-        if(path.equals("/no-range")&&"bytes=0-8191".equals(range)){out.write("HTTP/1.1 416 Range Not Satisfiable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.US_ASCII));return;}
+        if(path.startsWith("/no-range")&&range!=null){out.write("HTTP/1.1 416 Range Not Satisfiable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.US_ASCII));return;}
         int start=0,end=data.length-1;boolean partial=range!=null&&range.startsWith("bytes=");
         if(partial){String[] bounds=range.substring(6).split("-",-1);start=Integer.parseInt(bounds[0]);if(bounds.length>1&&!bounds[1].isEmpty())end=Math.min(end,Integer.parseInt(bounds[1]));}
         if(start> end)throw new IOException("Bad range");String headers="HTTP/1.1 "+(partial?"206 Partial Content":"200 OK")+"\r\nContent-Type: "+type+"\r\nContent-Length: "+(end-start+1)+"\r\n"+(partial?"Content-Range: bytes "+start+"-"+end+"/"+data.length+"\r\n":"")+"Connection: close\r\n\r\n";

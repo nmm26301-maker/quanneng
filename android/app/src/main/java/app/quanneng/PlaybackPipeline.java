@@ -118,7 +118,8 @@ final class PlaybackPipeline {
         if(!"https".equalsIgnoreCase(uri.getScheme())&&!"http".equalsIgnoreCase(uri.getScheme()))return item;
         DataSource source=upstream.createDataSource();
         try{
-            source.open(new DataSpec.Builder().setUri(uri).setLength(8192).build());
+            // Use an ordinary GET: some signed manifest endpoints reject Range probes.
+            source.open(new DataSpec.Builder().setUri(uri).build());
             byte[] bytes=new byte[8192];int count=0,read;
             while(count<bytes.length&&(read=source.read(bytes,count,bytes.length-count))!=-1){if(read==0)break;count+=read;}
             String type="";

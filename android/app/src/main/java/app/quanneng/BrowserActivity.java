@@ -85,7 +85,7 @@ public final class BrowserActivity extends PrivateActivity {
                     if(frames.size()<64||frames.containsKey(frame))frames.put(frame,reply);
                     String kind=data.optString("kind"),session=data.optString("session");
                     if("activate".equals(kind)){
-                        media.clear();contexts.clear();activeFrame=frame;activeSession=session;activeTitle=cleanTitle(data.optString("title"));playing=true;updateCount();
+                        media.clear();contexts.clear();activeFrame=frame;activeSession=session;activeTitle=cleanTitle(data.optString("title"),frame);playing=true;updateCount();
                     }else if("source".equals(kind)&&frame.equals(activeFrame)&&session.equals(activeSession))collect(data.optString("url",""),null,frame,data.optString("mime",""));
                     else if("status".equals(kind)&&frame.equals(activeFrame)&&session.equals(activeSession)){playing|=data.optBoolean("playing");blob|=data.optBoolean("blob");encrypted|=data.optBoolean("encrypted");updateCount();}
                 }catch(JSONException ignored){}
@@ -118,9 +118,14 @@ public final class BrowserActivity extends PrivateActivity {
             int id=++scanId;handler.postDelayed(()->{if(id==scanId&&!handingOff&&!encrypted&&!media.isEmpty())handoff(best());},700);
         });
     }
-    private String cleanTitle(String value){
+    private String cleanTitle(String value,String frame){
         String title=value==null?"":value.replaceAll("[\\p{Cntrl}]"," ").replaceAll("\\s+"," ").trim();
-        String pageTitle=web.getTitle();if(title.isEmpty()&&pageTitle!=null)title=pageTitle;
+        String pageTitle=web.getTitle();
+        if(pageTitle!=null&&!pageTitle.trim().isEmpty()){
+            pageTitle=pageTitle.replaceAll("[\\p{Cntrl}]"," ").trim();
+            if(title.isEmpty()||title.matches("(?i).*(?:^player$|^video$|^播放器$|^在线播放$|^视频播放$).*"))title=pageTitle;
+            else if(!Objects.equals(frame,web.getUrl())&&!title.contains(pageTitle)&&!pageTitle.contains(title))title=pageTitle+" · "+title;
+        }
         if(title.isEmpty())title="当前点播视频";
         return title.substring(0,Math.min(180,title.length()));
     }
