@@ -39,7 +39,7 @@
   ['pointerdown', 'touchstart', 'keydown'].forEach(event => document.addEventListener(event, intent, true));
   document.addEventListener('play', event => {
     if (event.target?.tagName !== 'VIDEO' || Date.now() - gesture > 15000) return;
-    if (active !== event.target) {active = event.target;serial++;seen = new Set();report({kind: 'activate', title: title(active)});}
+    active = event.target;serial++;seen = new Set();report({kind: 'activate', title: title(active)});
     scan();
     const src = active.currentSrc || active.src || '';
     if (src.startsWith('blob:') && !objects.has(src)) recent.forEach(value => candidate(value.url, value.type));

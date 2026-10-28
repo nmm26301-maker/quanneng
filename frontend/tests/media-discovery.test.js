@@ -40,3 +40,9 @@ test('native user gesture arms embedded playback and encrypted events are explic
  const f=fixture();f.context.QuannengMedia.onmessage({data:'gesture'});const video=f.video('https://media.example/12.mp4');f.events.play({target:video});f.events.encrypted({target:video});
  assert.equal(f.messages.filter(x=>x.kind==='source').length,1);assert.ok(f.messages.some(x=>x.kind==='status'&&x.encrypted));
 });
+
+test('reusing one video element for the next episode replaces source session and title',()=>{
+ const f=fixture(),video=f.video('https://media.example/ep12.mp4');f.events.pointerdown({isTrusted:true});f.events.play({target:video});
+ video.currentSrc='https://media.example/ep13.mp4';f.context.document.title='我的剧 第13集';f.events.pointerdown({isTrusted:true});f.events.play({target:video});
+ const sources=f.messages.filter(x=>x.kind==='source');assert.equal(sources.at(-1).session,'2');assert.equal(sources.at(-1).title,'我的剧 第13集');assert.equal(sources.at(-1).url,'https://media.example/ep13.mp4');assert.equal(f.messages.filter(x=>x.kind==='activate').length,2);
+});
