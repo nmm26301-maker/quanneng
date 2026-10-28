@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.Format;
 import androidx.media3.common.util.Util;
 import androidx.media3.database.StandaloneDatabaseProvider;
 import androidx.media3.datasource.*;
@@ -21,6 +22,9 @@ import androidx.media3.exoplayer.smoothstreaming.DefaultSsChunkSource;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy;
+import androidx.media3.extractor.Extractor;
+import androidx.media3.extractor.text.DefaultSubtitleParserFactory;
+import androidx.media3.extractor.text.SubtitleExtractor;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -123,7 +127,12 @@ final class PlaybackPipeline {
         }
         if(item.localConfiguration.subtitleConfigurations.isEmpty())return main;
         ArrayList<MediaSource> sources=new ArrayList<>();sources.add(main);
-        for(MediaItem.SubtitleConfiguration sub:item.localConfiguration.subtitleConfigurations)sources.add(new SingleSampleMediaSource.Factory(upstream).setLoadErrorHandlingPolicy(retry).createMediaSource(sub,C.TIME_UNSET));
+        for(MediaItem.SubtitleConfiguration sub:item.localConfiguration.subtitleConfigurations){
+            Format format=new Format.Builder().setSampleMimeType(sub.mimeType).setLanguage(sub.language).setSelectionFlags(sub.selectionFlags).setRoleFlags(sub.roleFlags).setLabel(sub.label).setId(sub.id).build();
+            DefaultSubtitleParserFactory parsers=new DefaultSubtitleParserFactory();
+            sources.add(new ProgressiveMediaSource.Factory(upstream,()->new Extractor[]{new SubtitleExtractor(parsers.create(format),format)})
+                .setLoadErrorHandlingPolicy(retry).createMediaSource(MediaItem.fromUri(sub.uri)));
+        }
         return new MergingMediaSource(sources.toArray(new MediaSource[0]));
     }
 }

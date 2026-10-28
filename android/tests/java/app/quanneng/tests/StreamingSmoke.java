@@ -22,7 +22,7 @@ public final class StreamingSmoke extends Instrumentation {
             try(InputStream input=getContext().getAssets().open("buffer-fixture.mp4");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=input.read(b))!=-1)out.write(b,0,n);fixture=out.toByteArray();}
             policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),true);
             cacheChecks();
-            player=open();Activity active=player;
+            player=open();Activity active=player;verifySubtitle(active);
             AtomicReference<Throwable> uiError=new AtomicReference<>();runOnMainSync(()->{try{active.findViewById(1801).performClick();}catch(Throwable e){uiError.set(e);}});check(uiError.get()==null,"Optimization settings failed");sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK);
             NativeNetwork network=new NativeNetwork();network.throttled=true;network.interrupt=true;
             Uri uri=Uri.parse("https://stream-fixture.invalid/weak-"+System.nanoTime()+".mp4");Object cached=cached(uri,Collections.emptyMap(),network.factory());
@@ -41,6 +41,12 @@ public final class StreamingSmoke extends Instrumentation {
         finally{if(player!=null){Activity p=player;runOnMainSync(p::finish);}try{policy("profile",new Class<?>[]{Context.class,int.class},context(),1);policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),true);}catch(Exception ignored){}}
     }
     private static Throwable cause(Throwable e){return e instanceof InvocationTargetException?((InvocationTargetException)e).getTargetException():e;}
+    private void verifySubtitle(Activity active)throws Exception{
+        File text=new File(context().getCacheDir(),"streaming-test-subtitle.vtt");
+        try(FileOutputStream out=new FileOutputStream(text)){out.write("WEBVTT\n\n00:00:00.000 --> 00:00:15.000\nStreamingSubtitleVerified\n".getBytes("UTF-8"));}
+        runOnMainSync(()->{try{Object view=active.findViewById(1000);call(view,"pause",new Class<?>[]{});call(view,"seekTo",new Class<?>[]{int.class},0);call(view,"addSubtitle",new Class<?>[]{Uri.class,String.class},Uri.fromFile(text),"text/vtt");call(view,"start",new Class<?>[]{});}catch(Exception e){throw new RuntimeException(e);}});
+        long limit=SystemClock.elapsedRealtime()+15000;AtomicBoolean visible=new AtomicBoolean();while(SystemClock.elapsedRealtime()<limit){runOnMainSync(()->{try{android.widget.TextView cue=(android.widget.TextView)PrivateTestAccess.field(active.findViewById(1000),"subtitle");visible.set(cue.getText().toString().contains("StreamingSubtitleVerified"));}catch(Exception ignored){}});if(visible.get()){text.delete();report("External VTT parsed into current Media3 cues and displayed by actual subtitle view");return;}SystemClock.sleep(100);}throw new AssertionError("External subtitle did not render");
+    }
     private static void check(boolean b,String message){if(!b)throw new AssertionError(message);}
     private void report(String message){Bundle b=new Bundle();b.putString("stream",message+"\n");sendStatus(0,b);}
     private static Object call(Object target,String name,Class<?>[] types,Object... args)throws Exception{
