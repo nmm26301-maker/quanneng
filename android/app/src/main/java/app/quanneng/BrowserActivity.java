@@ -46,7 +46,7 @@ public final class BrowserActivity extends PrivateActivity {
         EditText address=new EditText(this);address.setSingleLine();address.setTextSize(13);address.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_URI);address.setText(getIntent().getStringExtra("url"));toolbar.addView(address,new LinearLayout.LayoutParams(0,dp(56),1));
         Button go=new Button(this);go.setText("打开");go.setOnClickListener(v->{String u=address.getText().toString().trim();if(MainActivity.isHttps(u))web.loadUrl(u);else toast("请填写完整的 HTTPS 网页地址");});toolbar.addView(go);
         web=new WebView(this);content.addView(web,new LinearLayout.LayoutParams(-1,0,1));
-        mediaButton=new Button(this);mediaButton.setId(1401);content.addView(mediaButton,new LinearLayout.LayoutParams(-1,dp(60)));mediaButton.setOnClickListener(v->scan(true));
+        mediaButton=new Button(this);mediaButton.setId(1401);mediaButton.setSingleLine();mediaButton.setEllipsize(android.text.TextUtils.TruncateAt.END);content.addView(mediaButton,new LinearLayout.LayoutParams(-1,dp(60)));mediaButton.setOnClickListener(v->scan(true));
         note=new TextView(this);note.setTextSize(11);note.setTextColor(Color.rgb(169,183,184));note.setPadding(16,8,16,12);content.addView(note);
         WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setUseWideViewPort(true);s.setLoadWithOverviewMode(true);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         configureDiscovery();updateCount();
@@ -86,7 +86,7 @@ public final class BrowserActivity extends PrivateActivity {
                     String kind=data.optString("kind"),session=data.optString("session");
                     if("activate".equals(kind)){
                         media.clear();contexts.clear();activeFrame=frame;activeSession=session;activeTitle=cleanTitle(data.optString("title"),frame);playing=true;updateCount();
-                    }else if("source".equals(kind)&&frame.equals(activeFrame)&&session.equals(activeSession))collect(data.optString("url",""),null,frame,data.optString("mime",""));
+                    }else if("source".equals(kind)&&frame.equals(activeFrame)&&session.equals(activeSession))collect(data.optString("url",""),null,frame,data.optString("mime",""),data.optBoolean("direct"));
                     else if("status".equals(kind)&&frame.equals(activeFrame)&&session.equals(activeSession)){playing|=data.optBoolean("playing");blob|=data.optBoolean("blob");encrypted|=data.optBoolean("encrypted");updateCount();}
                 }catch(JSONException ignored){}
             });
@@ -98,10 +98,9 @@ public final class BrowserActivity extends PrivateActivity {
         return Objects.equals(uri.getHost(),origin.getHost())&&(uri.getPort()==-1?443:uri.getPort())==(origin.getPort()==-1?443:origin.getPort());
     }
     private void resetDiscovery(){generation.incrementAndGet();media.clear();contexts.clear();frames.clear();requests.clear();playing=false;blob=false;encrypted=false;activeFrame="";activeSession="";activeTitle="";handingOff=false;scanId++;updateCount();}
-    private void collect(String url,Map<String,String> requestHeaders,String frame){collect(url,requestHeaders,frame,"");}
-    private void collect(String url,Map<String,String> requestHeaders,String frame,String observedMime){
+    private void collect(String url,Map<String,String> requestHeaders,String frame,String observedMime,boolean direct){
         if(!MainActivity.isHttps(url)||url.length()>8192||activeFrame.isEmpty()||!Objects.equals(activeFrame,frame))return;
-        String role=MediaCandidatePolicy.role(url);if(role.equals("segment")||role.equals("subtitle"))return;
+        if(!MediaCandidatePolicy.exportable(url,direct))return;
         final int seenOn=generation.get();
         HashMap<String,String> captured=PlaybackHeaders.sanitize(requestHeaders==null?requests.get(url):requestHeaders);
         runOnUiThread(()->{

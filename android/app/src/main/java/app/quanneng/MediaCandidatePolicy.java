@@ -21,6 +21,12 @@ public final class MediaCandidatePolicy {
         }
         return "other";
     }
+    public static boolean exportable(String url,boolean direct){
+        String role=role(url);if("subtitle".equals(role))return false;
+        if(!"segment".equals(role))return true;
+        // Numeric filenames are legitimate when they are the selected element's own source.
+        try{return direct&&new URI(url).getPath().matches("(?i).*/[0-9]+\\.(mp4|m4v|webm|mkv|mov)$");}catch(Exception error){return false;}
+    }
     public static boolean playable(String url){String role=role(url);return "hls".equals(role)||"dash".equals(role)||"file".equals(role);}
     public static String mime(String url,String observed){
         String type=observed==null?"":observed.toLowerCase(Locale.ROOT).split(";",2)[0].trim();

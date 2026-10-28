@@ -133,7 +133,11 @@ final class PlaybackPipeline {
     MediaSource create(MediaItem item){
         MediaItem bare=item.buildUpon().setSubtitleConfigurations(Collections.emptyList()).build();
         MediaSource main;RetryPolicy retry=new RetryPolicy();
-        switch(Util.inferContentTypeForUriAndMimeType(bare.localConfiguration.uri,bare.localConfiguration.mimeType)){
+        // Media3's adaptive MIME switch accepts its canonical x-mpegURL constant.
+        // Web/CDN responses commonly use vnd.apple.mpegurl or lowercase x-mpegurl.
+        String observed=MediaCandidatePolicy.mime(bare.localConfiguration.uri.toString(),bare.localConfiguration.mimeType);
+        int contentType="application/vnd.apple.mpegurl".equals(observed)?C.CONTENT_TYPE_HLS:Util.inferContentTypeForUriAndMimeType(bare.localConfiguration.uri,bare.localConfiguration.mimeType);
+        switch(contentType){
             case C.CONTENT_TYPE_HLS:
                 main=new HlsMediaSource.Factory(type->type==C.DATA_TYPE_MEDIA||type==C.DATA_TYPE_MEDIA_INITIALIZATION?media.createDataSource():upstream.createDataSource()).setLoadErrorHandlingPolicy(retry).createMediaSource(bare);break;
             case C.CONTENT_TYPE_DASH:

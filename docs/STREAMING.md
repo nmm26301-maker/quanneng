@@ -52,3 +52,5 @@
 - 当前视频自动备注页面/视频标题及页面公开的选中集数，播放列表保存名称与来源网页并显示网站。不会从 URL 猜造集数，也不持久化 Cookie。
 - 原生媒体链路在后台通过同一请求上下文读取最多 8 KiB，优先识别实际 HLS/DASH/MP4/WebM 内容，再选 Media3 source，兼容无后缀、签名 URL 和错误 Content-Type。探测使用普通 GET 并限制读取字节，不依赖源站对 Range 的支持；网络探测失败时仍交给播放器正常请求。收到 HTML/登录验证页会明确提示回原网页，不再只显示模糊的 3003。
 - 增加真实 HTTP 源 + Media3 解码检查：无后缀且错误 MIME 的 HLS/DASH、错误 m3u8 后缀的 MP4、拒绝 Range 的 MP4/HLS、伪装为 MP4 的 HTML。网页回归实际触摸跨域 iframe 播放，检查预加载/自动播放不导出、只转接选中的 Blob、名称和来源持久化。
+
+HLS MIME regression: Media3 1.10.1 uses the canonical `application/x-mpegURL` constant in its adaptive source switch. The prior custom factory passed common website aliases (`application/vnd.apple.mpegurl`, lowercase `application/x-mpegurl`) directly into that switch, selecting a progressive file source and producing 3003 for valid HLS. The factory now explicitly maps normalized HLS aliases to `CONTENT_TYPE_HLS`, including after response probing and when restoring subtitle sources. FormatSmoke and the public HLS decode test exercise this boundary.
