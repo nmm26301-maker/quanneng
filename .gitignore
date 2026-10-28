@@ -10,6 +10,7 @@ out/
 android/tests/assets/*.mp4
 
 !android/tests/assets/seek-fixture.mp4
+!android/tests/assets/buffer-fixture.mp4
 
 qa/
 *signing-backup.zip
