@@ -35,12 +35,15 @@ import java.util.concurrent.TimeUnit;
 /** Media3 官方缓存、连接复用、缓冲和错误恢复的统一入口；本地/私密源不落入网络缓存。 */
 final class PlaybackPipeline {
     static final String[] PROFILES={"均衡 · 提前缓冲最多 60 秒","流畅优先 · 提前缓冲最多 120 秒","省流量 · 优先 720p 以下"};
-    static final long CACHE_LIMIT=512L*1024*1024;
+    static final long CACHE_LIMIT=Long.MAX_VALUE;
     private static final okhttp3.OkHttpClient HTTP=new okhttp3.OkHttpClient.Builder()
         .connectTimeout(10,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS)
         .retryOnConnectionFailure(true).followSslRedirects(false).build();
     private static SimpleCache cache;
+    private static final java.util.concurrent.ExecutorService PREFETCH=java.util.concurrent.Executors.newCachedThreadPool(r->{Thread t=new Thread(r,"quanneng-prefetch");t.setDaemon(true);return t;});
     private final DataSource.Factory upstream,media;
+    private final String cacheIdentity;
+    private java.util.concurrent.Future<?> prefetchTask;
     final boolean cacheEnabled;
     final int activeProfile;
     PlaybackPipeline(Context context,Uri uri,Map<String,String> headers)throws IOException{
@@ -49,7 +52,7 @@ final class PlaybackPipeline {
         String auth=null;for(Map.Entry<String,String> h:headers.entrySet())if(h.getKey().equalsIgnoreCase("Authorization"))auth=h.getValue();
         if(auth!=null){final String credential=auth;final java.net.URL origin=NetworkPolicy.url(uri.toString());requests=()->new NasDataSource(origin,credential);}
         upstream=new DefaultDataSource.Factory(context,requests);
-        media=cacheFactory(context,uri,headers,upstream);cacheEnabled=media!=upstream;
+        cacheIdentity=new TreeMap<>(headers).toString();media=cacheFactory(context,uri,headers,upstream);cacheEnabled=media!=upstream;
     }
     private static SharedPreferences prefs(Context c){return c.getSharedPreferences("streaming",Context.MODE_PRIVATE);}
     static int profile(Context c){return Math.max(0,Math.min(2,prefs(c).getInt("profile",1)));}
@@ -65,7 +68,7 @@ final class PlaybackPipeline {
         if(cache==null){
             File directory=new File(c.getCacheDir(),"streaming-v1");
             if(!directory.isDirectory()&&!directory.mkdirs())throw new IOException("无法创建视频缓存");
-            SimpleCache created=new SimpleCache(directory,new LeastRecentlyUsedCacheEvictor(CACHE_LIMIT),new StandaloneDatabaseProvider(c.getApplicationContext()));
+            SimpleCache created=new SimpleCache(directory,new NoOpCacheEvictor(),new StandaloneDatabaseProvider(c.getApplicationContext()));
             try{created.checkInitialization();cache=created;}catch(IOException error){created.release();throw error;}
         }
         return cache;
@@ -87,6 +90,23 @@ final class PlaybackPipeline {
     }
     static synchronized long cacheBytes(){return cache==null?0:cache.getCacheSpace();}
     static synchronized void clearCache(Context c)throws IOException{SimpleCache store=cache(c);for(String key:new HashSet<>(store.getKeys()))store.removeResource(key);}
+    /** For ordinary public progressive media, read the remainder through the same encrypted-key cache. */
+    synchronized void prefetch(Uri uri,String mime){
+        if(!cacheEnabled||prefetchTask!=null||!"https".equalsIgnoreCase(uri.getScheme())||
+           !("video/mp4".equals(mime)||"video/webm".equals(mime)||"video/x-matroska".equals(mime)))return;
+        prefetchTask=PREFETCH.submit(()->{DataSource source=media.createDataSource();try{
+            source.open(new DataSpec.Builder().setUri(uri).build());byte[] bytes=new byte[128*1024];
+            while(!Thread.currentThread().isInterrupted()&&source.read(bytes,0,bytes.length)!=-1){}
+        }catch(IOException|RuntimeException ignored){}finally{try{source.close();}catch(IOException ignored){}}});
+    }
+    synchronized void stopPrefetch(){if(prefetchTask!=null){prefetchTask.cancel(true);prefetchTask=null;}}
+    void completed(Uri uri){
+        if(!cacheEnabled)return;
+        java.util.concurrent.Future<?> pending; synchronized(this){pending=prefetchTask;stopPrefetch();}
+        String key=cacheKey(new DataSpec.Builder().setUri(uri).build(),cacheIdentity);
+        PREFETCH.execute(()->{if(pending!=null)try{pending.get(20,TimeUnit.SECONDS);}catch(Exception ignored){}
+            try{cache.removeResource(key);}catch(RuntimeException ignored){}});
+    }
     static DefaultLoadControl loadControl(Context c,boolean network){
         if(!network)return new DefaultLoadControl();
         int p=profile(c),min=p==1?30000:15000,max=p==1?120000:60000;

@@ -27,6 +27,7 @@
     const src = active.currentSrc || active.src || '';
     const mapped = objects.get(src);
     if (mapped) candidate(mapped.url, mapped.type, true);
+    else if (src.startsWith('blob:')) recent.forEach(value => candidate(value.url, value.type));
     else if (!src.startsWith('blob:')) candidate(src, active.querySelector?.('source')?.type || '', true);
     report({kind: 'status', playing: !active.paused, blob: src.startsWith('blob:'), encrypted: !!active.mediaKeys});
   }
@@ -69,5 +70,5 @@
   const revoke = URL.revokeObjectURL;
   if (revoke) URL.revokeObjectURL = function(value) {objects.delete(value);return revoke.call(this, value);};
   report({kind: 'ready'});
-  try {window.QuannengMedia.onmessage = event => {if (event.data === 'gesture') {gesture = Date.now();recent.length = 0;}else if (event.data === 'scan') scan();else if (event.data === 'pause') document.querySelectorAll('video').forEach(video => video.pause());};} catch {}
+  try {window.QuannengMedia.onmessage = event => {if (event.data === 'gesture') {gesture = Date.now();recent.length = 0;}else if (event.data === 'scan') {seen.clear();scan();}else if (event.data === 'pause') document.querySelectorAll('video').forEach(video => video.pause());};} catch {}
 })();

@@ -37,6 +37,8 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private Button loopButton,speedButton,jumpSettings;
     private int[] jumpValues=JumpSteps.DEFAULTS.clone();
     private ImageButton playButton,fullButton,screenLockButton,unlockTouchButton;
+    private Button rotateButton;
+    private boolean portraitFullscreen;
     private View touchShield;
     private LinearLayout unlockTouchArea;
     private boolean touchLocked;
@@ -140,13 +142,13 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private LinearLayout card(String heading,String subtitle){LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(dp(16),dp(16),dp(16),dp(16));GradientDrawable bg=PlayerUi.surface(this,PlayerUi.SURFACE,20);bg.setStroke(dp(1),PlayerUi.BORDER);card.setBackground(bg);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(16);details.addView(card,p);TextView h=PlayerUi.text(this,heading,17,PlayerUi.TEXT);h.setTypeface(null,Typeface.BOLD);card.addView(h);TextView sub=PlayerUi.text(this,subtitle,12,PlayerUi.MUTED);sub.setPadding(0,dp(6),0,dp(12));card.addView(sub);return card;}
     private LinearLayout row(LinearLayout parent){LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);parent.addView(row,new LinearLayout.LayoutParams(-1,-2));return row;}
     private void addWeighted(LinearLayout row,View view,int height){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(height),1);p.setMargins(dp(4),dp(4),dp(4),dp(4));row.addView(view,p);}
-    private void buildOverlayHeader(){overlayHeader=new LinearLayout(this);overlayHeader.setGravity(Gravity.CENTER_VERTICAL);overlayHeader.setPadding(dp(12),dp(4),dp(16),dp(4));overlayHeader.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xD9000000,0x00000000}));videoFrame.addView(overlayHeader,new FrameLayout.LayoutParams(-1,dp(64),Gravity.TOP));ImageButton back=PlayerUi.icon(this,"back","退出全屏",false);back.setId(1009);overlayHeader.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));back.setOnClickListener(v->setFullscreen(false));overlayTitle=PlayerUi.text(this,"",14,PlayerUi.TEXT);overlayTitle.setSingleLine();overlayTitle.setEllipsize(TextUtils.TruncateAt.END);overlayHeader.addView(overlayTitle,new LinearLayout.LayoutParams(0,-2,1));overlayClock=PlayerUi.text(this,"",14,PlayerUi.TEXT);overlayClock.setId(1313);overlayClock.setTypeface(Typeface.MONOSPACE);overlayClock.setPadding(dp(12),0,0,0);overlayClock.setGravity(Gravity.CENTER_VERTICAL);overlayClock.setContentDescription("当前时间");overlayHeader.addView(overlayClock,new LinearLayout.LayoutParams(-2,dp(48)));overlayHeader.setVisibility(View.GONE);}
+    private void buildOverlayHeader(){overlayHeader=new LinearLayout(this);overlayHeader.setGravity(Gravity.CENTER_VERTICAL);overlayHeader.setPadding(dp(12),dp(4),dp(16),dp(4));overlayHeader.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xD9000000,0x00000000}));videoFrame.addView(overlayHeader,new FrameLayout.LayoutParams(-1,dp(64),Gravity.TOP));ImageButton back=PlayerUi.icon(this,"back","退出全屏",false);back.setId(1009);overlayHeader.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));back.setOnClickListener(v->setFullscreen(false));overlayTitle=PlayerUi.text(this,"",14,PlayerUi.TEXT);overlayTitle.setSingleLine();overlayTitle.setEllipsize(TextUtils.TruncateAt.END);overlayHeader.addView(overlayTitle,new LinearLayout.LayoutParams(0,-2,1));rotateButton=PlayerUi.chip(this,"切换竖屏");rotateButton.setId(1314);overlayHeader.addView(rotateButton,new LinearLayout.LayoutParams(dp(96),dp(48)));rotateButton.setOnClickListener(v->{portraitFullscreen=!portraitFullscreen;rotateButton.setText(portraitFullscreen?"切换横屏":"切换竖屏");setRequestedOrientation(portraitFullscreen?ActivityInfo.SCREEN_ORIENTATION_PORTRAIT:ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);root.post(this::sizePlayer);});overlayClock=PlayerUi.text(this,"",14,PlayerUi.TEXT);overlayClock.setId(1313);overlayClock.setTypeface(Typeface.MONOSPACE);overlayClock.setPadding(dp(12),0,0,0);overlayClock.setGravity(Gravity.CENTER_VERTICAL);overlayClock.setContentDescription("当前时间");overlayHeader.addView(overlayClock,new LinearLayout.LayoutParams(-2,dp(48)));overlayHeader.setVisibility(View.GONE);}
     private void configureMedia(){
         video.setOnPreparedListener(mp->{media=(IjkExo2MediaPlayer)mp;ready=true;failed=false;loading.setVisibility(View.GONE);progress.setMax(Math.max(1,(int)((video.getDuration()+999L)/1000)));progress.setEnabled(video.getDuration()>0);setJumpsEnabled(video.getDuration()>0);playButton.setEnabled(true);screenLockButton.setEnabled(true);handler.removeCallbacks(tick);handler.post(tick);
             int resume=getIntent().hasExtra("position")?getIntent().getIntExtra("position",0):PlaybackHistory.position(this,current.toString());if(!initialSeek&&resume>0&&resume<video.getDuration()-2000)seekExact(resume);initialSeek=true;applyRememberedSubtitle();
             if(foreground)video.start();updatePlay();scheduleHide();
         });
-        video.setOnCompletionListener(mp->{if(looping){seekExact((int)pointA);video.start();return;}next();setChrome(true);updatePlay();});
+        video.setOnCompletionListener(mp->{if(looping){seekExact((int)pointA);video.start();return;}video.clearCompletedCache();next();setChrome(true);updatePlay();});
         video.setOnErrorListener((mp,what,extra)->{showFailure(what);return true;});
     }
     private void sizePlayer(){
@@ -165,7 +167,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     }
     private void setFullscreen(boolean value){
         fullscreen=value;header.setVisibility(value?View.GONE:View.VISIBLE);detailScroll.setVisibility(value?View.GONE:View.VISIBLE);setChrome(true);PlayerUi.setIcon(fullButton,value?"collapse":"fullscreen",value?"退出全屏":"进入全屏",false);
-        setRequestedOrientation(value?ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE:ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);applySystemBars();sizePlayer();root.post(this::sizePlayer);scheduleHide();
+        setRequestedOrientation(value?(portraitFullscreen?ActivityInfo.SCREEN_ORIENTATION_PORTRAIT:ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE):ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);applySystemBars();sizePlayer();root.post(this::sizePlayer);scheduleHide();
     }
     private void applySystemBars(){
         if(Build.VERSION.SDK_INT>=30){WindowInsetsController controller=getWindow().getInsetsController();if(controller!=null){controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);if(fullscreen)controller.hide(WindowInsets.Type.systemBars());else controller.show(WindowInsets.Type.systemBars());}}
@@ -274,7 +276,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
             if(i==0)new PrivateDialogBuilder(this).setTitle("新策略在下次打开视频时生效").setSingleChoiceItems(PlaybackPipeline.PROFILES,PlaybackPipeline.profile(this),(choice,p)->{PlaybackPipeline.profile(this,p);choice.dismiss();toast("播放策略已保存，下次打开视频生效");}).setNegativeButton("取消",null).show();
             else if(i==1){PlaybackPipeline.cacheSelected(this,!PlaybackPipeline.cacheSelected(this));toast("缓存设置已保存，下次打开视频生效");}
             else vaultIo.execute(()->{try{PlaybackPipeline.clearCache(this);runOnUiThread(()->whenUnlocked(()->toast("视频缓存已清理")));}catch(java.io.IOException e){runOnUiThread(()->whenUnlocked(()->toast("缓存正忙，请稍后重试")));}});
-        }).setPositiveButton("完成",null).setNeutralButton("功能说明",(d,w)->new PrivateDialogBuilder(this).setTitle("缓冲与缓存").setMessage("默认流畅优先，尽量提前缓冲至 120 秒，受网速、视频码率与内存上限影响。\n自动清晰度需要视频源提供多档画质，普通 MP4 无法凭空降码率。\n公共 HTTPS 视频边播边缓存，最多 512 MB，自动清理旧片段；系统也可能回收缓存。登录来源、NAS、本地和保险箱视频不写入此缓存。\n直播清单每次从源站刷新，缓存不等于完整下载。弱网自动重试，失效地址仍需重新获取。").setPositiveButton("知道了",null).show()).show();
+        }).setPositiveButton("完成",null).setNeutralButton("功能说明",(d,w)->new PrivateDialogBuilder(this).setTitle("缓冲与缓存").setMessage("默认流畅优先，尽量提前缓冲至 120 秒，受网速、视频码率与内存上限影响。\n自动清晰度需要视频源提供多档画质，普通 MP4 无法凭空降码率。\n公共 HTTPS 普通视频会预取到片尾，播放完成后清理本条缓存；中途退出时缓存保留，可手动清理，也可能被系统回收。登录来源、NAS、本地和保险箱视频不写入此缓存。\n直播清单每次从源站刷新，缓存不等于完整下载。弱网自动重试，失效地址仍需重新获取。").setPositiveButton("知道了",null).show()).show();
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);whenUnlocked(()->handleSubtitleResult(request,result,data));

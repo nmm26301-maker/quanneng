@@ -65,8 +65,10 @@ public final class BrowserSmoke extends Instrumentation {
             }};addMonitor(handoff);
             AtomicReference<int[]> point=new AtomicReference<>();runOnMainSync(()->{int[] xy=new int[2];web.getLocationOnScreen(xy);float d=web.getResources().getDisplayMetrics().density;point.set(new int[]{xy[0]+(int)(90*d),xy[1]+(int)(60*d)});});
             int[] xy=point.get();tap(xy[0],xy[1]);
+            if(count(browser)!=0)throw new AssertionError("Playback recognized media before the native identify button");
+            runOnMainSync(()->browser.findViewById(1402).performClick());
             long deadline=SystemClock.elapsedRealtime()+15000;while(count(browser)==0&&SystemClock.elapsedRealtime()<deadline)SystemClock.sleep(100);
-            if(count(browser)==0)throw new AssertionError("Selected blob not identified; advanced="+field(browser,"advanced")+", frame="+field(browser,"activeFrame"));
+            if(count(browser)==0)throw new AssertionError("Selected blob not identified after manual scan; advanced="+field(browser,"advanced")+", frame="+field(browser,"activeFrame"));
             SystemClock.sleep(1800);
             if(nativeStarts.get()!=0||browser.isFinishing())throw new AssertionError("Web playback or delayed detection launched the player without clicking transfer");
             await(web,"document.querySelector('#poster').complete&&document.querySelector('#poster').naturalWidth>0");
