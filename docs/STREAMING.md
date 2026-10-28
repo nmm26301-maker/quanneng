@@ -56,3 +56,10 @@
 HLS MIME regression: Media3 1.10.1 uses the canonical `application/x-mpegURL` constant in its adaptive source switch. The prior custom factory passed common website aliases (`application/vnd.apple.mpegurl`, lowercase `application/x-mpegurl`) directly into that switch, selecting a progressive file source and producing 3003 for valid HLS. The factory now explicitly maps normalized HLS aliases to `CONTENT_TYPE_HLS`, including after response probing and when restoring subtitle sources. FormatSmoke and the public HLS decode test exercise this boundary.
 
 自动转接同时由原生 WebView 的真实触摸/播放按键时刻校验，网页伪造 activate/source 消息不能在未点播时触发转接；原生手势通知也覆盖跨域嵌入播放器。加密媒体事件保留原网页观看。
+
+## v0.4.3 手动转接与网页返回
+
+- 识别视频只更新“转到全能播放”按钮；任何网页消息、自动播放、延时扫描都不会直接启动播放器，必须点击原生按钮。网页全屏时也提供同样的手动按钮。
+- BrowserActivity 直接以子 Activity 打开播放器，保留当前 WebView。原生返回、播完后返回及加载失败的“返回原网页”都回到同一页面；保留网址、JS/DOM、输入框、滚动与网页历史，不再跳转 MainActivity、about:blank 或关闭网页。进程被系统回收时仅尽力恢复 WebView 历史，无法保证恢复完整 JS 内存。
+- 默认“网页加速”先加载页面内容和播放控件，再恢复网络图片；首屏提交后约 350ms、页面完成时或 2.5 秒兜底会恢复图片。可手动关闭并记住选择。HTTP 缓存遵循源站 Cache-Control，不强制使用过期页面。该优化减少图片争抢首屏网络资源，不能保证源站或线路本身提速。
+- 仅保存用户主动转接的视频标题、来源和播放位置。返回主界面时同步到播放列表，确认写入后清除待同步队列，避免删除记录后再次出现。Cookie/授权请求头只保留在本次浏览的内存中。

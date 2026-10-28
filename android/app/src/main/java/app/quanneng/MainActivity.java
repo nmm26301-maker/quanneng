@@ -22,6 +22,7 @@ public final class MainActivity extends PrivateActivity {
     private static final int PICK_FILE = 41;
     private static final int PICK_NATIVE_VIDEO = 42;
     private static final int NATIVE_PLAYER = 43;
+    private static final int WEB_BROWSER = 1402;
     private final Map<String,JSONObject> mediaContexts = new LinkedHashMap<>();
     private WebView web;
     private FrameLayout root;
@@ -126,7 +127,7 @@ public final class MainActivity extends PrivateActivity {
     }
     private void openBrowser(String url) {
         if (!isHttps(url)) { toast("请使用 HTTPS 网页地址"); return; }
-        startActivity(new Intent(this, BrowserActivity.class).putExtra("url", url));
+        startActivityForResult(new Intent(this, BrowserActivity.class).putExtra("url", url),WEB_BROWSER);
     }
     private void toast(String text) { runOnUiThread(()->Toast.makeText(this,text,Toast.LENGTH_LONG).show()); }
     @Override protected void onActivityResult(int request,int result,Intent data) {
@@ -135,6 +136,10 @@ public final class MainActivity extends PrivateActivity {
     }
     private void handlePrivateResult(int request,int result,Intent data){
         if (imported != null && imported.onActivityResult(request,result,data)) return;
+        if(request==WEB_BROWSER){
+            if(data!=null)try{JSONArray contexts=new JSONArray(data.getStringExtra("browserContexts"));for(int i=0;i<contexts.length();i++){JSONObject context=contexts.optJSONObject(i);if(context!=null&&isHttps(context.optString("url"))){mediaContexts.put(context.getString("url"),context);if(mediaContexts.size()>32)mediaContexts.remove(mediaContexts.keySet().iterator().next());}}}catch(JSONException ignored){}
+            deliverBrowserRecords();return;
+        }
         if (request == PICK_NATIVE_VIDEO && result == RESULT_OK && data != null) {
             ArrayList<String> queue=new ArrayList<>();
             if(data.getClipData()!=null){for(int i=0;i<data.getClipData().getItemCount();i++)queue.add(data.getClipData().getItemAt(i).getUri().toString());}
@@ -152,6 +157,10 @@ public final class MainActivity extends PrivateActivity {
     }
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent); setIntent(intent);whenUnlocked(()->{receiveIntent(intent);deliverPendingUrl();});
+    }
+    private void deliverBrowserRecords(){
+        if(web==null||!trusted())return;String records=BrowserHistory.all(this).toString();if("[]".equals(records))return;
+        web.evaluateJavascript("typeof window.quannengBrowserRecords==='function'&&window.quannengBrowserRecords("+records+")===true",done->{if("true".equals(done))BrowserHistory.delivered(this,records);});
     }
     private JSONObject pendingMedia;
     private void deliverPendingUrl() {
@@ -217,7 +226,7 @@ public final class MainActivity extends PrivateActivity {
         if(imported!=null)imported.close();
         web.removeJavascriptInterface("Quanneng"); web.destroy(); super.onDestroy();
     }
-    @Override protected void onPrivateUnlocked(){foreground=true;if(web!=null){web.onResume();deliverPendingUrl();deliverJumpSteps(null);}}
+    @Override protected void onPrivateUnlocked(){foreground=true;if(web!=null){web.onResume();deliverPendingUrl();deliverBrowserRecords();deliverJumpSteps(null);}}
     @Override protected void onPrivateLocked(){foreground=false;if(web!=null)web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause())",null);}
     private void deliverJumpSteps(String error){deliverJumpSteps(error,null);}
     private void deliverJumpSteps(String error,String requestId){if(web==null||web.getUrl()==null||!web.getUrl().startsWith(ORIGIN))return;try{JSONObject data=new JSONObject();data.put("values",JumpSteps.json(this));if(error!=null)data.put("error",error);if(requestId!=null)data.put("requestId",requestId);web.evaluateJavascript("window.dispatchEvent(new CustomEvent('quanneng-jumps',{detail:"+data.toString()+"}))",null);}catch(JSONException ignored){}}
@@ -228,7 +237,7 @@ public final class MainActivity extends PrivateActivity {
         @JavascriptInterface public void openTransfers(){runOnUiThread(()->{if(trusted())startActivity(new Intent(MainActivity.this,TransferActivity.class));});}
         @JavascriptInterface public void openSecuritySettings(){runOnUiThread(()->{if(trusted())changePrivatePassword();});}
         @JavascriptInterface public void lockApp(){runOnUiThread(()->{if(trusted())lockPrivateApp();});}
-        @JavascriptInterface public void frontendReady() { runOnUiThread(()->{deliverPendingUrl();if(trusted())deliverJumpSteps(null);}); }
+        @JavascriptInterface public void frontendReady() { runOnUiThread(()->{deliverPendingUrl();if(trusted()){deliverJumpSteps(null);deliverBrowserRecords();}}); }
         @JavascriptInterface public void openWebsite(String url) { runOnUiThread(()->{if(trusted())openBrowser(url);}); }
         @JavascriptInterface public void enterPip(){runOnUiThread(()->{if(trusted())toast("私人模式下暂不支持画中画");});}
         @JavascriptInterface public void systemPlay(String url) { runOnUiThread(()->{if(trusted()&&isHttps(url)){try{JSONObject request=new JSONObject();request.put("url",url);launchMedia(request);}catch(JSONException ignored){}}}); }

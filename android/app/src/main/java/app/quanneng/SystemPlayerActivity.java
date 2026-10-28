@@ -81,7 +81,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void buildPlayer(){
         root=new LinearLayout(this);root.setOrientation(1);root.setBackgroundColor(PlayerUi.BG);setContentView(root);
         header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(8),dp(4),dp(12),dp(4));root.addView(header,new LinearLayout.LayoutParams(-1,dp(64)));
-        ImageButton close=PlayerUi.icon(this,"back","返回播放列表",false);header.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));close.setOnClickListener(v->finish());
+        ImageButton close=PlayerUi.icon(this,"back",getIntent().getBooleanExtra("returnToBrowser",false)?"返回网页":"返回播放列表",false);header.addView(close,new LinearLayout.LayoutParams(dp(48),dp(48)));close.setOnClickListener(v->finish());
         LinearLayout names=new LinearLayout(this);names.setOrientation(1);names.setPadding(dp(8),0,0,0);header.addView(names,new LinearLayout.LayoutParams(0,-2,1));
         names.addView(PlayerUi.text(this,"全能  /  正在播放",12,PlayerUi.MUTED));title=PlayerUi.text(this,"",16,PlayerUi.TEXT);title.setSingleLine();title.setEllipsize(TextUtils.TruncateAt.END);names.addView(title);
         videoFrame=new FrameLayout(this);videoFrame.setBackground(PlayerUi.surface(this,Color.BLACK,18));videoFrame.setClipToOutline(true);root.addView(videoFrame);
@@ -233,7 +233,8 @@ public final class SystemPlayerActivity extends PrivateActivity {
         AlertDialog.Builder dialog=new PrivateDialogBuilder(this).setTitle("视频加载失败").setMessage(reason+"\n可以重新加载，或返回原网页重新获取地址。\n诊断代码："+code)
             .setPositiveButton("重试",(d,w)->load(current,true)).setNegativeButton("返回",(d,w)->finish());
         String page=getIntent().getStringExtra("sourcePage");
-        if(MainActivity.isHttps(page))dialog.setNeutralButton("打开原网页",(d,w)->{startActivity(new Intent(this,BrowserActivity.class).putExtra("url",page));finish();});
+        if(getIntent().getBooleanExtra("returnToBrowser",false))dialog.setNeutralButton("返回原网页",(d,w)->finish());
+        else if(MainActivity.isHttps(page))dialog.setNeutralButton("打开原网页",(d,w)->{startActivity(new Intent(this,BrowserActivity.class).putExtra("url",page));finish();});
         else if("https".equals(current.getScheme()))dialog.setNeutralButton("网页内尝试",(d,w)->{Intent result=resultData();result.putExtra("webFallback",true);setResult(RESULT_OK,result);super.finish();});
         dialog.show();
     }
@@ -291,7 +292,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
         String stamp=name+":"+source.lastModified()+":"+getSharedPreferences("subtitle-settings",0).getLong(name,0);if(stamp.equals(subtitleStamp))return;subtitleStamp=stamp;
         vaultIo.execute(()->{try{if(!source.getCanonicalFile().getParentFile().equals(SubtitleStore.root(this).getCanonicalFile())||!source.isFile())return;java.io.File adjusted=SubtitleStore.adjusted(this,source);runOnUiThread(()->whenUnlocked(()->{if(epoch==mediaEpoch&&name.equals(activeSubtitle)&&ready)video.addSubtitle(Uri.fromFile(adjusted),"text/vtt");}));}catch(Exception e){runOnUiThread(()->{if(epoch==mediaEpoch)toast("字幕读取失败，请在字幕中心重新选择");});}});
     }
-    private Intent resultData(){return new Intent().putExtra("url",current==null?"":current.toString()).putExtra("position",video==null?0:video.getCurrentPosition());}
+    private Intent resultData(){return new Intent().putExtra("url",current==null?"":current.toString()).putExtra("position",video==null?0:video.getCurrentPosition()).putExtra("duration",video==null?0:video.getDuration());}
     @Override public void finish(){rememberPosition();if(current!=null)setResult(RESULT_OK,resultData());super.finish();}
     private String time(long ms){long s=Math.max(0,ms/1000);return String.format(Locale.ROOT,"%02d:%02d:%02d",s/3600,s/60%60,s%60);}
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
