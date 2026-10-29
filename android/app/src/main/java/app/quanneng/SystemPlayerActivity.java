@@ -57,6 +57,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private boolean initialSeek,restoringVault;
     private final java.util.concurrent.ExecutorService vaultIo=java.util.concurrent.Executors.newSingleThreadExecutor();
     private TransferRuntime.Token subtitleToken;
+    private Map<String,String> playbackHeaders=Collections.emptyMap();
     private ArrayList<String> queue;
     private final Map<String,String> episodeNames=new HashMap<>();
     private TextView episodeStatus;
@@ -148,7 +149,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
         translationDetail=PlayerUi.chip(this,"翻译视频字幕 · 选择语言");translationDetail.setId(1317);features.addView(translationDetail,new LinearLayout.LayoutParams(-1,dp(52)));translationDetail.setOnClickListener(v->chooseCaptionLanguage());
         Button center=PlayerUi.chip(this,"字幕中心 / 调整偏移与字号");features.addView(center,new LinearLayout.LayoutParams(-1,dp(52)));center.setOnClickListener(v->startActivityForResult(new Intent(this,SubtitleActivity.class).putExtra("pick",true),45));
         for(String kind:new String[]{"cast","handoff","diagnostics","gestures"}){Button actionButton=PlayerUi.chip(this,"cast".equals(kind)?"电视投屏":"handoff".equals(kind)?"分享接力":"diagnostics".equals(kind)?"播放诊断":"手势设置");features.addView(actionButton,new LinearLayout.LayoutParams(-1,dp(52)));actionButton.setOnClickListener(v->{if("handoff".equals(kind)){HandoffActivity.share(this,current.toString(),video.getCurrentPosition());return;}Class<?> screen="cast".equals(kind)?CastActivity.class:"diagnostics".equals(kind)?DiagnosticsActivity.class:GestureSettingsActivity.class;startActivity(new Intent(this,screen).putExtra("url",current.toString()));});}
-        TextView hint=PlayerUi.text(this,"视频画面双指捏合缩放，放大后单指拖动画面。字幕翻译需要视频网页提供字幕，外语原字幕还需要设备支持对应语言的系统翻译。",12,PlayerUi.MUTED);hint.setLineSpacing(dp(4),1);hint.setPadding(dp(4),dp(16),dp(4),0);details.addView(hint);
+        TextView hint=PlayerUi.text(this,"视频画面双指捏合缩放，放大后单指拖动。字幕翻译优先使用网页字幕；没有字幕时从当前视频音轨在本机识别，再翻译并保持时间同步。长视频处理需要等待，可再次点按钮取消。",12,PlayerUi.MUTED);hint.setLineSpacing(dp(4),1);hint.setPadding(dp(4),dp(16),dp(4),0);details.addView(hint);
     }
     private LinearLayout card(String heading,String subtitle){LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(dp(16),dp(16),dp(16),dp(16));GradientDrawable bg=PlayerUi.surface(this,PlayerUi.SURFACE,20);bg.setStroke(dp(1),PlayerUi.BORDER);card.setBackground(bg);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(16);details.addView(card,p);TextView h=PlayerUi.text(this,heading,17,PlayerUi.TEXT);h.setTypeface(null,Typeface.BOLD);card.addView(h);TextView sub=PlayerUi.text(this,subtitle,12,PlayerUi.MUTED);sub.setPadding(0,dp(6),0,dp(12));card.addView(sub);return card;}
     private LinearLayout row(LinearLayout parent){LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);parent.addView(row,new LinearLayout.LayoutParams(-1,-2));return row;}
@@ -180,16 +181,22 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void updateZoomLabels(){String level=String.format(Locale.ROOT,"%.1f×",video.getZoom());zoomButton.setText(level);zoomDetail.setText("双指缩放画面 · "+level);zoomQuick.setText("双指缩放 · "+level);zoomQuick.setContentDescription("双指缩放画面，可拖动位置；当前 "+level);}
     private void translationState(String label,boolean enabled){if(translationQuick!=null){translationQuick.setText(label);translationQuick.setEnabled(enabled);}if(translationDetail!=null){translationDetail.setText(label);translationDetail.setEnabled(enabled);}}
     private void chooseCaptionLanguage(){
-        String page=captionPage();if(page==null){toast("请从带字幕的视频网页转接播放，或导入本地字幕");return;}
-        new PrivateDialogBuilder(this).setTitle("字幕翻译到哪种语言？").setItems(VideoCaptions.LABELS,(dialog,index)->fetchVideoCaptions(page,VideoCaptions.LANGUAGES[index])).show();
+        if(subtitleToken!=null){subtitleToken.cancel();translationState("视频语音翻译",true);toast("正在取消语音翻译");return;}
+        if(!ready){toast("请等待视频加载");return;}
+        new PrivateDialogBuilder(this).setTitle("视频语音翻译到哪种语言？").setItems(VideoCaptions.LABELS,(dialog,index)->fetchVideoCaptions(captionPage(),VideoCaptions.LANGUAGES[index])).show();
     }
     private void fetchVideoCaptions(String page,String language){
         if(subtitleToken!=null||!privateReady())return;
-        TransferRuntime.Token token=new TransferRuntime.Token();subtitleToken=token;long epoch=mediaEpoch;
-        translationState("正在获取并翻译字幕…",false);
-        vaultIo.execute(()->{File translated=null;String message="";try{VideoCaptions.Track track=VideoCaptions.fetch(this,page,language,token);translated=track.language.equals(language)?track.file:CaptionTranslator.translate(this,track.file,track.language,language,token);if(translated!=track.file)track.file.delete();}catch(Exception error){message=error.getMessage()==null?"字幕翻译失败，请稍后重试":error.getMessage();}
-            final File result=translated;final String failure=message;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;subtitleToken=null;
-                if(result==null){translationState("视频字幕翻译 · 重试",true);whenUnlocked(()->toast(failure));return;}
+        TransferRuntime.Token token=new TransferRuntime.Token();subtitleToken=token;long epoch=mediaEpoch;final Uri source=current;final int duration=video.getDuration();final Map<String,String> requestHeaders=new HashMap<>(playbackHeaders);
+        translationState("正在识别语音 · 点按取消",true);
+        vaultIo.execute(()->{File translated=null;String message="";try{
+                VideoCaptions.Track track=null;if(page!=null)try{track=VideoCaptions.fetch(this,page,language,token);}catch(Exception error){token.check();}
+                if(track==null)track=new VideoCaptions.Track(SpeechSubtitle.transcribe(this,source,requestHeaders,duration,token,(percent,phase)->runOnUiThread(()->{if(subtitleToken==token&&epoch==mediaEpoch)translationState(phase+" · 点按取消",true);})),"en");
+                translated=track.language.equals(language)?track.file:CaptionTranslator.translate(this,track.file,track.language,language,token);
+                if(translated!=track.file)track.file.delete();
+            }catch(Exception error){message=error.getMessage()==null?"语音翻译失败，请稍后重试":error.getMessage();}
+            final File result=translated;final String failure=message;runOnUiThread(()->{if(isFinishing()||isDestroyed()||subtitleToken!=token)return;subtitleToken=null;
+                if(result==null){translationState("视频语音翻译 · 重试",true);whenUnlocked(()->toast(failure));return;}
                 translationState("字幕已加载 · 换语言",true);whenUnlocked(()->{if(epoch!=mediaEpoch)return;activeSubtitle=result.getName();subtitleStamp="";PlaybackHistory.subtitle(this,current.toString(),activeSubtitle);applyRememberedSubtitle();toast("翻译字幕已加载");});
             });});
     }
@@ -240,14 +247,14 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void seekExact(int value){jumpTarget=-1;try{if(media!=null)media.seekTo((long)value);else video.seekTo(value);}catch(IllegalStateException error){toast("视频尚未准备好，请稍后重试");}}
     private void clearLoop(){looping=false;updatePoints();}
     private void load(Uri uri,boolean initial){
-        rememberPosition();++mediaEpoch;activeSubtitle=PlaybackHistory.subtitle(this,uri.toString());subtitleStamp="";current=uri;updateEpisodes();initialSeek=false;selectedSpeed=1f;ready=false;failed=false;media=null;jumpTarget=-1;setJumpsEnabled(false);pointA=pointB=0;clearLoop();String mediaName=episodeNames.containsKey(uri.toString())?episodeNames.get(uri.toString()):(initial&&getIntent().hasExtra("title")?getIntent().getStringExtra("title"):displayName(uri));title.setText(mediaName);title.setContentDescription(mediaName);overlayTitle.setText(mediaName);position.setText("连接中…");loading.setVisibility(View.VISIBLE);playButton.setEnabled(false);screenLockButton.setEnabled(false);progress.setEnabled(false);progress.setProgress(0);speedButton.setText("1.0×");
+        rememberPosition();if(subtitleToken!=null){subtitleToken.cancel();subtitleToken=null;}++mediaEpoch;activeSubtitle=PlaybackHistory.subtitle(this,uri.toString());subtitleStamp="";current=uri;updateEpisodes();initialSeek=false;selectedSpeed=1f;ready=false;failed=false;media=null;jumpTarget=-1;setJumpsEnabled(false);pointA=pointB=0;clearLoop();String mediaName=episodeNames.containsKey(uri.toString())?episodeNames.get(uri.toString()):(initial&&getIntent().hasExtra("title")?getIntent().getStringExtra("title"):displayName(uri));title.setText(mediaName);title.setContentDescription(mediaName);overlayTitle.setText(mediaName);position.setText("连接中…");loading.setVisibility(View.VISIBLE);playButton.setEnabled(false);screenLockButton.setEnabled(false);progress.setEnabled(false);progress.setProgress(0);speedButton.setText("1.0×");
         HashMap<String,String> headers=new HashMap<>();
         if(initial){try{JSONObject data=new JSONObject(getIntent().getStringExtra("headers")==null?"{}":getIntent().getStringExtra("headers"));Iterator<String> keys=data.keys();while(keys.hasNext()){String k=keys.next();headers.put(k,data.getString(k));}}catch(JSONException ignored){}
             String cookie=getIntent().getStringExtra("cookie");if(cookie!=null)headers.put("Cookie",cookie);
         }
         if("https".equals(uri.getScheme())){String cookie=CookieManager.getInstance().getCookie(uri.toString());if(cookie!=null)headers.put("Cookie",cookie);String agent=getIntent().getStringExtra("userAgent");if(agent!=null)headers.put("User-Agent",agent);}
         String nas=getIntent().getStringExtra("nasAuth");if(nas!=null&&!nas.isEmpty())headers.put("Authorization",nas);
-        try{if(!"content".equals(uri.getScheme()))NetworkPolicy.url(uri.toString());video.setSourceMime(initial?getIntent().getStringExtra("mime"):null);video.setVideoURI(uri,PlaybackHeaders.sanitize(headers));}catch(Exception error){showFailure(-1004);}
+        playbackHeaders=PlaybackHeaders.sanitize(headers);try{if(!"content".equals(uri.getScheme()))NetworkPolicy.url(uri.toString());video.setSourceMime(initial?getIntent().getStringExtra("mime"):null);video.setVideoURI(uri,playbackHeaders);}catch(Exception error){showFailure(-1004);}
         handler.postDelayed(()->{if(current==uri&&!ready&&!failed)showFailure(-110);},40000);
     }
     private String displayName(Uri uri){

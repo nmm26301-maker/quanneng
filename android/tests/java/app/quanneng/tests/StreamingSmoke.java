@@ -35,7 +35,7 @@ public final class StreamingSmoke extends Instrumentation {
             boolean ambiguous=false;try{post.invoke(null,"https://video.twimg.com/one.mp4\nhttps://video.twimg.com/two.mp4");}catch(InvocationTargetException expected){ambiguous=true;}check(ambiguous,"Multiple unrelated post streams were silently selected");
             try(InputStream input=getContext().getAssets().open("buffer-fixture.mp4");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=input.read(b))!=-1)out.write(b,0,n);fixture=out.toByteArray();}
             policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),true);
-            cacheChecks();
+            cacheChecks();verifySpeech();
             player=open();Activity active=player;verifySubtitle(active);
             AtomicReference<Throwable> uiError=new AtomicReference<>();runOnMainSync(()->{try{active.findViewById(1801).performClick();}catch(Throwable e){uiError.set(e);}});check(uiError.get()==null,"Optimization settings failed");
             boolean dismissed=false;long dialogDeadline=SystemClock.elapsedRealtime()+5000;
@@ -65,6 +65,17 @@ public final class StreamingSmoke extends Instrumentation {
         long limit=SystemClock.elapsedRealtime()+15000;AtomicBoolean visible=new AtomicBoolean();while(SystemClock.elapsedRealtime()<limit){runOnMainSync(()->{try{android.widget.TextView cue=(android.widget.TextView)PrivateTestAccess.field(active.findViewById(1000),"subtitle");visible.set(cue.getText().toString().contains("StreamingSubtitleVerified"));}catch(Exception ignored){}});if(visible.get()){text.delete();report("External VTT parsed into current Media3 cues and displayed by actual subtitle view");return;}SystemClock.sleep(100);}throw new AssertionError("External subtitle did not render");
     }
     private static void check(boolean b,String message){if(!b)throw new AssertionError(message);}
+    private void verifySpeech()throws Exception{
+        Class<?> runtime=Class.forName("app.quanneng.TransferRuntime$Token"),progress=Class.forName("app.quanneng.TransferRuntime$Progress");
+        Constructor<?> ctor=runtime.getDeclaredConstructor();ctor.setAccessible(true);Object token=ctor.newInstance();
+        Object listener=Proxy.newProxyInstance(progress.getClassLoader(),new Class<?>[]{progress},(proxy,method,args)->null);
+        Uri fixture=Uri.parse("content://app.quanneng.next.tests.fixture/jfk.wav");
+        File transcript=(File)call(Class.forName("app.quanneng.SpeechSubtitle"),"transcribe",new Class<?>[]{Context.class,Uri.class,Map.class,int.class,runtime,progress},context(),fixture,Collections.emptyMap(),11000,token,listener);
+        String captions=new String(java.nio.file.Files.readAllBytes(transcript.toPath()),"UTF-8");
+        check(captions.startsWith("WEBVTT")&&captions.contains(" --> "),"Real speech did not yield synchronized VTT");
+        check(captions.toLowerCase(Locale.ROOT).contains("country"),"Whisper did not recognize speech from video audio");
+        transcript.delete();report("Bundled multilingual Whisper model decoded public speech audio to timed captions on-device");
+    }
     private void report(String message){Bundle b=new Bundle();b.putString("stream",message+"\n");sendStatus(0,b);}
     private static Object call(Object target,String name,Class<?>[] types,Object... args)throws Exception{
         Class<?> type=target instanceof Class?(Class<?>)target:target.getClass();Method m=null;

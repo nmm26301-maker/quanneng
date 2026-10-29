@@ -25,6 +25,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Set up Android emulator and NDK tools
+        uses: android-actions/setup-android@035682743ab223ec9c6169af09811dff8247e520
+        with:
+          cmdline-tools-version: '12266719'
+      - name: Build pinned offline speech recognizer and bundle model
+        shell: bash
+        run: |
+          sdkmanager --install 'ndk;27.2.12479018'
+          git clone --depth 1 --branch v1.8.5 https://github.com/ggml-org/whisper.cpp.git "$RUNNER_TEMP/whisper.cpp"
+          test "$(git -C "$RUNNER_TEMP/whisper.cpp" rev-parse HEAD)" = f24588a272ae8e23280d9c220536437164e6ed28
+          for abi in x86_64 arm64-v8a; do
+            cmake -S "$RUNNER_TEMP/whisper.cpp" -B "$RUNNER_TEMP/whisper-$abi" -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/27.2.12479018/build/cmake/android.toolchain.cmake" -DANDROID_ABI="$abi" -DANDROID_PLATFORM=android-26 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF
+            cmake --build "$RUNNER_TEMP/whisper-$abi" --target whisper-cli -j 4
+            mkdir -p "android/build/native/$abi"
+            cp "$RUNNER_TEMP/whisper-$abi/bin/whisper-cli" "android/build/native/$abi/libwhispercli.so"
+          done
+          mkdir -p frontend/dist/models
+          curl --fail --location --retry 3 https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin -o frontend/dist/models/ggml-base-q5_1.bin
+          echo '422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898  frontend/dist/models/ggml-base-q5_1.bin' | sha256sum -c -
       - name: Verify release signing guard
         run: python3 -m unittest discover -s android/tests -p test_signing.py -v
       - name: Check media request header policy
@@ -75,13 +94,11 @@ jobs:
         run: |
           echo "be659bfae932ea372c136d6daabf686826c6621ea71a847afc60bc9b7b417dbe  android/tests/assets/buffer-fixture.mp4" | sha256sum -c -
           curl --fail --location --retry 3 https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4 -o android/tests/assets/flower.mp4
+          curl --fail --location --retry 3 https://raw.githubusercontent.com/ggml-org/whisper.cpp/f24588a272ae8e23280d9c220536437164e6ed28/samples/jfk.wav -o android/tests/assets/jfk.wav
+          echo '59dfb9a4acb36fe2a2affc14bacbee2920ff435cb13cc314a08c13f66ba7860e  android/tests/assets/jfk.wav' | sha256sum -c -
           python3 android/tools/build-tests.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/quanneng.p12" --out "$RUNNER_TEMP/Quanneng-tests.apk"
           python3 -c "import sys, os; sys.path.insert(0, 'android/tools'); from signing import prepare_signing; prepare_signing(os.environ['RUNNER_TEMP'] + '/legacy-fixture.p12', development=True)"
           python3 android/tools/build-tests.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/legacy-fixture.p12" --out "$RUNNER_TEMP/Quanneng-legacy-fixture.apk" --legacy
-      - name: Set up Android emulator tools
-        uses: android-actions/setup-android@035682743ab223ec9c6169af09811dff8247e520
-        with:
-          cmdline-tools-version: '12266719'
       - name: Enable emulator acceleration on the ephemeral runner
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

@@ -12,6 +12,7 @@ for f in [tools/'aapt2',tools/'zipalign',tools/'apksigner',tools/'d8',platform]:
  if not f.is_file():raise SystemExit(f'Missing SDK component: {f}')
 web=root/'frontend'/'dist'
 if not (web/'index.html').is_file():raise SystemExit('Run npm ci --prefix frontend && npm run build --prefix frontend first')
+if not (web/'models'/'ggml-base-q5_1.bin').is_file():raise SystemExit('Missing pinned speech recognition model asset')
 build=root/'android'/'build';build.mkdir(parents=True,exist_ok=True)
 for name in ['classes','dex','generated']:
  directory=build/name
@@ -46,6 +47,9 @@ with zipfile.ZipFile(build/'base.apk','a',compression=zipfile.ZIP_DEFLATED) as a
  for dex in (build/'dex').glob('*.dex'):apk.write(dex,dex.name)
  for library in libraries:
   for native in (library/'jni'/args.abi).glob('*.so'):apk.write(native,'lib/'+args.abi+'/'+native.name)
+ whisper=build/'native'/args.abi/'libwhispercli.so'
+ if not whisper.is_file():raise SystemExit('Missing whisper.cpp native binary for '+args.abi)
+ apk.write(whisper,'lib/'+args.abi+'/'+whisper.name)
 run(tools/'zipalign','-f','4',build/'base.apk',build/'aligned.apk')
 out=pathlib.Path(args.out).resolve();out.parent.mkdir(parents=True,exist_ok=True)
 subprocess.run([str(tools/'apksigner'),'sign','--ks',str(key),'--ks-key-alias','quanneng','--ks-pass','env:QUANNENG_STORE_PASSWORD','--key-pass','env:QUANNENG_STORE_PASSWORD','--out',str(out),str(build/'aligned.apk')],check=True,env=env)
