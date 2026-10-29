@@ -30,6 +30,7 @@ public final class MatureVideoView extends FrameLayout {
     private Uri uri;
     private String sourceMime;
     private float zoom=1f;
+    private float panX,panY;
     private String failureDetail="";
     private java.util.concurrent.Future<?> resolving;
     private static final java.util.concurrent.ExecutorService RESOLVER=java.util.concurrent.Executors.newFixedThreadPool(2);
@@ -92,7 +93,9 @@ public final class MatureVideoView extends FrameLayout {
         if(engine==null||engine.getVideoWidth()<=0||engine.getVideoHeight()<=0||getWidth()<=0||getHeight()<=0)return;
         float ratio=(float)engine.getVideoWidth()/engine.getVideoHeight();int width=getWidth(),height=Math.round(width/ratio);if(height>getHeight()){height=getHeight();width=Math.round(height*ratio);}width=Math.round(width*zoom);height=Math.round(height*zoom);
         FrameLayout.LayoutParams params=(FrameLayout.LayoutParams)surface.getLayoutParams();if(params.width!=width||params.height!=height){params.width=width;params.height=height;surface.setLayoutParams(params);}
+        clampPan(width,height);surface.setTranslationX(panX);surface.setTranslationY(panY);
     }
+    private void clampPan(int width,int height){panX=Math.max(-Math.max(0,(width-getWidth())/2f),Math.min(Math.max(0,(width-getWidth())/2f),panX));panY=Math.max(-Math.max(0,(height-getHeight())/2f),Math.min(Math.max(0,(height-getHeight())/2f),panY));}
     public void start(){if(engine!=null)engine.start();}
     public void pause(){if(engine!=null)engine.pause();}
     public boolean isPlaying(){return engine!=null&&engine.isPlaying();}
@@ -105,7 +108,10 @@ public final class MatureVideoView extends FrameLayout {
         String cache=pipeline==null||!pipeline.cacheEnabled?"当前来源不写入磁盘缓存":pipeline.prefetchEligible(uri,sourceMime)?"普通视频后台预取至片尾 · 播完清理":"分段视频随播放缓存 · 播完清理";
         return "已提前缓冲 "+getBufferedAhead()/1000+" 秒 · "+(pipeline!=null&&pipeline.activeProfile==2?"省流量清晰度":"自动清晰度")+"\n"+cache;}
     public void seekTo(int position){if(engine!=null)engine.seekTo(position);}
-    public void setZoom(float value){zoom=Math.max(1f,Math.min(2f,value));fitVideo();}
+    public float getZoom(){return zoom;}
+    public void setZoom(float value){setZoomAt(value,getWidth()/2f,getHeight()/2f);}
+    public void setZoomAt(float value,float focusX,float focusY){float next=Math.max(1f,Math.min(4f,value));float ratio=next/zoom;panX=(focusX-getWidth()/2f)*(1-ratio)+panX*ratio;panY=(focusY-getHeight()/2f)*(1-ratio)+panY*ratio;zoom=next;if(zoom==1f){panX=0;panY=0;}fitVideo();}
+    public void panBy(float dx,float dy){if(zoom<=1f)return;panX+=dx;panY+=dy;fitVideo();}
     public void clearCompletedCache(){if(pipeline!=null&&uri!=null)pipeline.completed(uri);}
     public void stopPlayback(){if(resolving!=null){resolving.cancel(true);resolving=null;}if(pipeline!=null){pipeline.stopPrefetch();pipeline=null;}Engine previous=engine;engine=null;if(previous!=null){previous.release();post(previous::release);}}
     public void addSubtitle(Uri source,String mime){

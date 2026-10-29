@@ -23,6 +23,13 @@ public final class StreamingSmoke extends Instrumentation {
             check("AbCdEf123_-".equals(youtube.invoke(null,"https://www.youtube.com/watch?v=AbCdEf123_-")),"YouTube video URL rejected");
             check("AbCdEf123_-".equals(youtube.invoke(null,"https://youtu.be/AbCdEf123_-")),"YouTube short URL rejected");
             check(youtube.invoke(null,"https://www.youtube.com.evil.test/watch?v=AbCdEf123_-")==null,"Lookalike YouTube host accepted");
+            Method captionLanguage=Class.forName("app.quanneng.VideoCaptions").getDeclaredMethod("trackLanguage",String.class);captionLanguage.setAccessible(true);
+            check("ja".equals(captionLanguage.invoke(null,"subtitle.ja.vtt")),"Foreign caption language lost");
+            check("zh".equals(captionLanguage.invoke(null,"subtitle.zh-Hans.vtt")),"Translated caption language lost");
+            check(captionLanguage.invoke(null,"subtitle.unknown.vtt")==null,"Unknown caption language accepted");
+            Method captionPage=Class.forName("app.quanneng.VideoCaptions").getDeclaredMethod("sourcePage",String.class,String.class);captionPage.setAccessible(true);
+            check("https://x.com/a/status/123".equals(captionPage.invoke(null,"https://x.com/a/status/123","https://cdn.example/video.mp4")),"Other platform source page lost");
+            check(captionPage.invoke(null,"http://example.com/post",null)==null,"Insecure caption source accepted");
             Method post=Class.forName("app.quanneng.PostVideoResolver").getDeclaredMethod("parse",String.class);post.setAccessible(true);
             check("https://video.twimg.com/clip.mp4?tag=1".equals(post.invoke(null,"https://video.twimg.com/clip.mp4?tag=1\n")),"Single post video URL rejected");
             boolean ambiguous=false;try{post.invoke(null,"https://video.twimg.com/one.mp4\nhttps://video.twimg.com/two.mp4");}catch(InvocationTargetException expected){ambiguous=true;}check(ambiguous,"Multiple unrelated post streams were silently selected");
@@ -89,8 +96,30 @@ public final class StreamingSmoke extends Instrumentation {
         ActivityMonitor monitor=addMonitor("app.quanneng.SystemPlayerActivity",null,false);
         Intent intent=new Intent().setComponent(new ComponentName("app.quanneng.next","app.quanneng.MainActivity")).setAction(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://app.quanneng.next.tests.fixture/seek-fixture.mp4"),"video/mp4").putExtra("sourcePage","https://www.youtube.com/watch?v=AbCdEf123_-").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
         runOnMainSync(()->context().startActivity(intent));Activity p=waitForMonitorWithTimeout(monitor,15000);removeMonitor(monitor);check(p!=null,"Player did not open");PrivateTestAccess.awaitUnlocked(this,p);awaitPlaying(p,300,20000);runOnMainSync(()->{check(p.findViewById(1810).getVisibility()==android.view.View.GONE,"Single video shows episode selector");check(p.findViewById(1824).getVisibility()==android.view.View.GONE,"Single video shows previous/next episode card");
-            android.widget.Button zoom=p.findViewById(1320);check(zoom!=null&&zoom.isShown(),"Visible zoom control missing");zoom.performClick();check(zoom.getText().toString().contains("1.25"),"Zoom control did not change level");check(p.findViewById(1318)!=null&&p.findViewById(1318).isShown(),"Visible YouTube subtitle control missing");});return p;
+            android.widget.Button zoom=p.findViewById(1320);check(zoom!=null&&zoom.isShown(),"Visible zoom control missing");zoom.performClick();check(zoom.getText().toString().contains("1.5"),"Zoom control did not change level");check(p.findViewById(1318)!=null&&p.findViewById(1318).isShown(),"Visible caption translation control missing");});verifyPinch(p);return p;
     }
+    private void verifyPinch(Activity p)throws Exception{
+        AtomicReference<Throwable> failure=new AtomicReference<>();runOnMainSync(()->{try{
+            android.view.View touch=p.findViewById(1010),video=p.findViewById(1000);float cx=touch.getWidth()/2f,cy=touch.getHeight()/2f;long now=android.os.SystemClock.uptimeMillis();
+            dispatch(touch,now,android.view.MotionEvent.ACTION_DOWN,cx-30,cy);
+            dispatchPair(touch,now,android.view.MotionEvent.ACTION_POINTER_DOWN|1<<android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT,cx-30,cy,cx+30,cy);
+            dispatchPair(touch,now,android.view.MotionEvent.ACTION_MOVE,cx-100,cy,cx+100,cy);
+            dispatchPair(touch,now,android.view.MotionEvent.ACTION_MOVE,cx-130,cy,cx+130,cy);
+            dispatchPair(touch,now,android.view.MotionEvent.ACTION_POINTER_UP|1<<android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT,cx-130,cy,cx+130,cy);
+            dispatch(touch,now,android.view.MotionEvent.ACTION_UP,cx-130,cy);
+            float enlarged=(Float)call(video,"getZoom",new Class<?>[]{});check(enlarged>1.5f,"Two-finger pinch did not enlarge the video");
+            dispatch(touch,now+200,android.view.MotionEvent.ACTION_DOWN,cx,cy);dispatch(touch,now+200,android.view.MotionEvent.ACTION_MOVE,cx+85,cy);dispatch(touch,now+200,android.view.MotionEvent.ACTION_UP,cx+85,cy);
+            android.view.SurfaceView surface=(android.view.SurfaceView)PrivateTestAccess.field(video,"surface");check(Math.abs(surface.getTranslationX())>1,"Enlarged picture did not pan under a finger");
+            dispatch(touch,now+400,android.view.MotionEvent.ACTION_DOWN,cx-130,cy);
+            dispatchPair(touch,now+400,android.view.MotionEvent.ACTION_POINTER_DOWN|1<<android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT,cx-130,cy,cx+130,cy);
+            dispatchPair(touch,now+400,android.view.MotionEvent.ACTION_MOVE,cx-30,cy,cx+30,cy);
+            dispatchPair(touch,now+400,android.view.MotionEvent.ACTION_POINTER_UP|1<<android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT,cx-30,cy,cx+30,cy);
+            dispatch(touch,now+400,android.view.MotionEvent.ACTION_UP,cx-30,cy);
+            check((Float)call(video,"getZoom",new Class<?>[]{})<enlarged,"Reverse pinch did not shrink the video");
+        }catch(Throwable error){failure.set(error);}});if(failure.get()!=null)throw new AssertionError("Pinch/pan gesture failed",failure.get());report("Two-finger focal zoom, one-finger picture pan and reverse pinch verified on decoded video");
+    }
+    private static void dispatch(android.view.View view,long down,int action,float x,float y){android.view.MotionEvent event=android.view.MotionEvent.obtain(down,down+50,action,x,y,0);view.dispatchTouchEvent(event);event.recycle();}
+    private static void dispatchPair(android.view.View view,long down,int action,float x1,float y1,float x2,float y2){android.view.MotionEvent.PointerProperties[] ids={new android.view.MotionEvent.PointerProperties(),new android.view.MotionEvent.PointerProperties()};ids[0].id=0;ids[1].id=1;ids[0].toolType=ids[1].toolType=android.view.MotionEvent.TOOL_TYPE_FINGER;android.view.MotionEvent.PointerCoords[] pos={new android.view.MotionEvent.PointerCoords(),new android.view.MotionEvent.PointerCoords()};pos[0].x=x1;pos[0].y=y1;pos[1].x=x2;pos[1].y=y2;pos[0].pressure=pos[1].pressure=1;pos[0].size=pos[1].size=1;android.view.MotionEvent event=android.view.MotionEvent.obtain(down,down+60,action,2,ids,pos,0,0,1,1,0,0,0,0);view.dispatchTouchEvent(event);event.recycle();}
     private Object exo(Activity p)throws Exception{Object view=p.findViewById(1000),engine=PrivateTestAccess.field(view,"engine");return call(engine,"player",new Class<?>[]{});}
     private void play(Activity p,Object cached,Uri uri){runOnMainSync(()->{try{
         Class<?> factory=Class.forName("androidx.media3.exoplayer.source.ProgressiveMediaSource$Factory"),itemType=Class.forName("androidx.media3.common.MediaItem"),mediaType=Class.forName("androidx.media3.exoplayer.source.MediaSource"),retryType=Class.forName("androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy");
