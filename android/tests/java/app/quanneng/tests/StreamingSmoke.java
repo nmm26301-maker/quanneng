@@ -79,7 +79,7 @@ public final class StreamingSmoke extends Instrumentation {
         catch(InvocationTargetException error){
             // Foxlet publishes arm64-v8a only. The x86 emulator still prepares and checks
             // the Mozilla model; native inference is exercised on arm64 devices.
-            if(!Arrays.asList(Build.SUPPORTED_ABIS).contains("arm64-v8a")&&error.getCause()!=null&&error.getCause().toString().contains("Native translation library could not be loaded")){
+            if(!new File(context().getApplicationInfo().nativeLibraryDir,"libfoxlet.so").isFile()&&error.getCause()!=null&&error.getCause().toString().contains("Native translation library could not be loaded")){
                 report("English audio transcription and verified translation model preparation; native inference requires arm64");return;
             }
             throw error;
