@@ -22,7 +22,7 @@ import kotlin.Unit;
 import kotlinx.coroutines.BuildersKt;
 import kotlinx.coroutines.CoroutineScope;
 
-/** English captions to Chinese with a locally installed, hash-verified Mozilla model. */
+/** English captions to the selected language with a locally installed, hash-verified Mozilla model. */
 final class OfflineCaptionTranslator {
     private OfflineCaptionTranslator() {}
     private interface Suspending<T> {Object invoke(Continuation<? super T> continuation);}
@@ -31,7 +31,9 @@ final class OfflineCaptionTranslator {
         return (T)BuildersKt.runBlocking(EmptyCoroutineContext.INSTANCE,
             (Function2<CoroutineScope,Continuation<? super T>,Object>)(scope, continuation)->operation.invoke(continuation));
     }
-    static File translate(Context context,File source,TransferRuntime.Token token,TransferRuntime.Progress progress)throws Exception {
+    static File translate(Context context,File source,String language,TransferRuntime.Token token,TransferRuntime.Progress progress)throws Exception {
+        if(!java.util.Arrays.asList(VideoCaptions.LANGUAGES).contains(language)||"en".equals(language))throw new IOException("不支持的翻译目标语言");
+        String target="zh".equals(language)?"zh-Hans":language;
         String raw;try(FileInputStream in=new FileInputStream(source)){raw=SubtitleStore.read(in);}
         List<String> stamps=new ArrayList<>(),lines=new ArrayList<>();
         for(String block:raw.split("\\n\\s*\\n")){
@@ -45,14 +47,14 @@ final class OfflineCaptionTranslator {
             if(lines.size()>3000)throw new IOException("字幕片段过多");
         }
         if(lines.isEmpty())throw new IOException("语音识别没有返回可翻译的内容");
-        token.check();progress.update(0,"正在准备英译中语言包（首次约 52 MB）");
+        token.check();progress.update(0,"正在准备 "+language+" 翻译语言包（首次需下载）");
         Foxlet engine=await(c->Foxlet.Companion.create(context.getApplicationContext(),new FoxletConfig(),c));
         try {
-            LanguagePair pair=new LanguagePair("en","zh-Hans");
+            LanguagePair pair=new LanguagePair("en",target);
             Function1<io.github.yinvoker.foxlet.DownloadProgress,Unit> onDownload=p->{
                 if(token.cancelled.get())throw new java.util.concurrent.CancellationException("任务已取消");
                 long total=p.getTotalBytes();int percent=total>0?(int)Math.min(100,p.getDownloadedBytes()*100/total):0;
-                progress.update(percent,"正在下载英译中语言包 · "+percent+"%");return Unit.INSTANCE;
+                progress.update(percent,"正在下载 "+language+" 语言包 · "+percent+"%");return Unit.INSTANCE;
             };
             InstalledModel model=await(c->engine.getModels().prepare(pair,PreparePolicy.LocalOrBundled,null,onDownload,c));
             StringBuilder vtt=new StringBuilder("WEBVTT\n\n");
@@ -67,7 +69,7 @@ final class OfflineCaptionTranslator {
                 }
                 progress.update(end*100/lines.size(),"正在翻译视频语音 · "+end+"/"+lines.size());
             }
-            token.check();File out=new File(SubtitleStore.root(context),System.currentTimeMillis()+"-zh-语音翻译.vtt");
+            token.check();File out=new File(SubtitleStore.root(context),System.currentTimeMillis()+"-"+language+"-语音翻译.vtt");
             Files.write(out.toPath(),SubtitleStore.shift(vtt.toString(),0).getBytes(StandardCharsets.UTF_8));return out;
         }finally{await(c->engine.shutdown(c));}
     }

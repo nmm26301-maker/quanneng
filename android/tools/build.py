@@ -45,6 +45,12 @@ run(*compiler,'-encoding','UTF-8','-source','8','-target','8','-classpath',class
 run(tools/'d8','--lib',platform,'--min-api','26','--output',build/'dex',*visible_files(build/'classes','*.class'),*[library/'classes.jar' for library in libraries])
 with zipfile.ZipFile(build/'base.apk','a',compression=zipfile.ZIP_DEFLATED) as apk:
  for dex in (build/'dex').glob('*.dex'):apk.write(dex,dex.name)
+ # Foxlet loads its pinned Mozilla model catalog through ClassLoader.getResourceAsStream.
+ foxlet=next(library for library in libraries if library.name=='foxlet')
+ with zipfile.ZipFile(foxlet/'classes.jar') as classes:
+  for name in classes.namelist():
+   if name.startswith('io/github/yinvoker/foxlet/') and not name.endswith(('/', '.class')):
+    apk.writestr(name,classes.read(name))
  native_libraries={}
  for library in libraries:
   for native in (library/'jni'/args.abi).glob('*.so'):native_libraries[native.name]=native

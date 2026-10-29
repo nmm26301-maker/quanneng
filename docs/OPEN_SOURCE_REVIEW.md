@@ -2,7 +2,7 @@
 
 ## v0.5.1 视频语音翻译
 
-采用 Foxlet Translate v0.5.0（MIT，AAR SHA-256 `5dbb384907d69c2aba129fd15dba30dda94ede0fa556dc6a167d041ee479ec0e`），提供 Android 9+ 的英译简体中文离线推理。模型从 Mozilla 发布源按固定清单下载并逐项校验，模型独立适用 MPL-2.0。AAR 内含许可及来源声明；Kotlin stdlib 2.4.10、coroutines 1.10.2 的下载散列固定在依赖锁文件。字幕内容只在本机转换。网络用于首次下载翻译模型，不传输用户语音或字幕。
+采用 Foxlet Translate v0.5.0（MIT，AAR SHA-256 `5dbb384907d69c2aba129fd15dba30dda94ede0fa556dc6a167d041ee479ec0e`），提供 Android 9+ 的英语字幕到界面所列语言的离线推理。模型从 Mozilla 发布源按固定清单下载并逐项校验，模型独立适用 MPL-2.0。AAR 内含许可及来源声明；Kotlin stdlib 2.4.10、coroutines 1.10.2 的下载散列固定在依赖锁文件。字幕内容只在本机转换。网络用于首次下载翻译模型，不传输用户语音或字幕。
 
 检查时间：2026-10-25。
 
