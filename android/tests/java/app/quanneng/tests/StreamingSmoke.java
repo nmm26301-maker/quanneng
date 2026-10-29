@@ -19,11 +19,18 @@ public final class StreamingSmoke extends Instrumentation {
         PrivateTestAccess.install(this);Bundle result=new Bundle();Activity player=null;
         try{
             sourceType=Class.forName("androidx.media3.datasource.DataSource");factoryType=Class.forName("androidx.media3.datasource.DataSource$Factory");specType=Class.forName("androidx.media3.datasource.DataSpec");
+            Method youtube=Class.forName("app.quanneng.YouTubeSubtitle").getDeclaredMethod("videoId",String.class);youtube.setAccessible(true);
+            check("AbCdEf123_-".equals(youtube.invoke(null,"https://www.youtube.com/watch?v=AbCdEf123_-")),"YouTube video URL rejected");
+            check("AbCdEf123_-".equals(youtube.invoke(null,"https://youtu.be/AbCdEf123_-")),"YouTube short URL rejected");
+            check(youtube.invoke(null,"https://www.youtube.com.evil.test/watch?v=AbCdEf123_-")==null,"Lookalike YouTube host accepted");
             try(InputStream input=getContext().getAssets().open("buffer-fixture.mp4");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=input.read(b))!=-1)out.write(b,0,n);fixture=out.toByteArray();}
             policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),true);
             cacheChecks();
             player=open();Activity active=player;verifySubtitle(active);
-            AtomicReference<Throwable> uiError=new AtomicReference<>();runOnMainSync(()->{try{active.findViewById(1801).performClick();}catch(Throwable e){uiError.set(e);}});check(uiError.get()==null,"Optimization settings failed");sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK);
+            AtomicReference<Throwable> uiError=new AtomicReference<>();runOnMainSync(()->{try{active.findViewById(1801).performClick();}catch(Throwable e){uiError.set(e);}});check(uiError.get()==null,"Optimization settings failed");
+            boolean dismissed=false;long dialogDeadline=SystemClock.elapsedRealtime()+5000;
+            while(!dismissed&&SystemClock.elapsedRealtime()<dialogDeadline){android.view.accessibility.AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();if(root!=null)for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText("完成"))if("完成".contentEquals(node.getText())&&node.isClickable()){dismissed=node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);break;}if(!dismissed)SystemClock.sleep(100);}
+            check(dismissed&&!active.isFinishing(),"Optimization dialog did not close while retaining the player");
             NativeNetwork network=new NativeNetwork();network.throttled=true;network.interrupt=true;
             Uri uri=Uri.parse("https://stream-fixture.invalid/weak-"+System.nanoTime()+".mp4");Object cached=cached(uri,Collections.emptyMap(),network.factory());
             play(active,cached,uri);awaitPlaying(active,5000,45000);check(network.opens.get()>=2&&network.interrupted.get(),"Interrupted request was not retried");
