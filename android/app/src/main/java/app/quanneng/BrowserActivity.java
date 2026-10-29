@@ -180,6 +180,8 @@ public final class BrowserActivity extends PrivateActivity {
         for(Map.Entry<String,Long> entry:new ArrayList<>(recentMediaRequests.entrySet()))
             if(entry.getValue()>=webGestureAt)collect(entry.getKey(),null,activeFrame,"",false);
     }
+    private String sourcePage(){String page=web.getUrl();if(YouTubeSubtitle.isYouTube(attemptPage))return attemptPage;
+        return MainActivity.isHttps(page)&&sameOrigin(attemptPage,Uri.parse(page))?attemptPage:page;}
     private void collect(String url,Map<String,String> requestHeaders,String frame,String observedMime,boolean direct){
         if(!recognitionRequested||!MainActivity.isHttps(url)||url.length()>8192||activeFrame.isEmpty()||!Objects.equals(activeFrame,frame))return;
         if(!MediaCandidatePolicy.exportable(url,direct))return;
@@ -195,7 +197,7 @@ public final class BrowserActivity extends PrivateActivity {
             headers.putAll(captured);String page=frame!=null?frame:old!=null?old.optString("page",web.getUrl()):web.getUrl();
             if(!headers.containsKey("Referer")){String ref=PlaybackHeaders.referrer(page,url);if(!ref.isEmpty())headers.put("Referer",ref);}
             headers.put("User-Agent",web.getSettings().getUserAgentString());String cookie=CookieManager.getInstance().getCookie(url);if(cookie!=null)headers.put("Cookie",cookie);
-            try{JSONObject c=new JSONObject();c.put("url",url);c.put("page",MainActivity.isHttps(attemptPage)?attemptPage:web.getUrl());c.put("frame",page);c.put("title",activeTitle);String mime=MediaCandidatePolicy.mime(url,observedMime);if(mime.isEmpty()&&old!=null)mime=old.optString("mime","");c.put("mime",mime);c.put("headers",new JSONObject(PlaybackHeaders.sanitize(headers)));contexts.put(url,c);}catch(JSONException ignored){}
+            try{JSONObject c=new JSONObject();c.put("url",url);c.put("page",sourcePage());c.put("frame",page);c.put("title",activeTitle);String mime=MediaCandidatePolicy.mime(url,observedMime);if(mime.isEmpty()&&old!=null)mime=old.optString("mime","");c.put("mime",mime);c.put("headers",new JSONObject(PlaybackHeaders.sanitize(headers)));contexts.put(url,c);}catch(JSONException ignored){}
             updateCount();
         });
     }
