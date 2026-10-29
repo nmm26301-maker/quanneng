@@ -101,7 +101,9 @@ public final class MatureVideoView extends FrameLayout {
     public int getBufferPercentage(){return engine==null?0:engine.getBufferedPercentage();}
     public long getBufferedAhead(){return engine==null||engine.player()==null?0:Math.max(0,engine.player().getBufferedPosition()-engine.player().getCurrentPosition());}
     public boolean isBuffering(){return engine!=null&&engine.player()!=null&&engine.player().getPlaybackState()==Player.STATE_BUFFERING;}
-    public String streamingStatus(){boolean local=uri==null||!"https".equals(uri.getScheme())&&!"http".equals(uri.getScheme());return local?"本地视频 · 不消耗网络流量":"已提前缓冲 "+getBufferedAhead()/1000+" 秒 · "+(pipeline!=null&&pipeline.activeProfile==2?"省流量清晰度":"自动清晰度")+"\n"+(pipeline!=null&&pipeline.cacheEnabled?"后台预取至片尾 · 播完自动清理":"当前来源不写入磁盘缓存");}
+    public String streamingStatus(){boolean local=uri==null||!"https".equals(uri.getScheme())&&!"http".equals(uri.getScheme());if(local)return "本地视频 · 不消耗网络流量";
+        String cache=pipeline==null||!pipeline.cacheEnabled?"当前来源不写入磁盘缓存":pipeline.prefetchEligible(uri,sourceMime)?"普通视频后台预取至片尾 · 播完清理":"分段视频随播放缓存 · 播完清理";
+        return "已提前缓冲 "+getBufferedAhead()/1000+" 秒 · "+(pipeline!=null&&pipeline.activeProfile==2?"省流量清晰度":"自动清晰度")+"\n"+cache;}
     public void seekTo(int position){if(engine!=null)engine.seekTo(position);}
     public void setZoom(float value){zoom=Math.max(1f,Math.min(2f,value));fitVideo();}
     public void clearCompletedCache(){if(pipeline!=null&&uri!=null)pipeline.completed(uri);}

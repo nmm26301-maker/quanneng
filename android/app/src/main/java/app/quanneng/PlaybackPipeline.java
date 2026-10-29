@@ -62,7 +62,7 @@ final class PlaybackPipeline {
     static void cacheSelected(Context c,boolean value){prefs(c).edit().putBoolean("cache",value).apply();}
     static boolean cacheEligible(Uri uri,Map<String,String> headers){
         if(!"https".equalsIgnoreCase(uri.getScheme()))return false;
-        for(String name:headers.keySet())if(name.equalsIgnoreCase("Authorization")||name.equalsIgnoreCase("Cookie")||name.equalsIgnoreCase("Proxy-Authorization"))return false;
+        for(String name:headers.keySet())if(name.equalsIgnoreCase("Authorization")||name.equalsIgnoreCase("Proxy-Authorization"))return false;
         return true;
     }
     private static synchronized SimpleCache cache(Context c)throws IOException{
@@ -94,10 +94,13 @@ final class PlaybackPipeline {
     }
     static synchronized long cacheBytes(){return cache==null?0:cache.getCacheSpace();}
     static synchronized void clearCache(Context c)throws IOException{SimpleCache store=cache(c);for(String key:new HashSet<>(store.getKeys()))store.removeResource(key);}
-    /** For ordinary public progressive media, read the remainder through the same encrypted-key cache. */
+    /** 只对可连续读取的普通视频预取；分段流由播放器按选中清晰度缓存。 */
+    boolean prefetchEligible(Uri uri,String mime){
+        return cacheEnabled&&"https".equalsIgnoreCase(uri.getScheme())&&
+            ("video/mp4".equals(mime)||"video/webm".equals(mime)||"video/x-matroska".equals(mime));
+    }
     synchronized void prefetch(Uri uri,String mime){
-        if(!cacheEnabled||prefetchTask!=null||!"https".equalsIgnoreCase(uri.getScheme())||
-           !("video/mp4".equals(mime)||"video/webm".equals(mime)||"video/x-matroska".equals(mime)))return;
+        if(prefetchTask!=null||!prefetchEligible(uri,mime))return;
         prefetchTask=PREFETCH.submit(()->{DataSource source=media.createDataSource();try{
             source.open(new DataSpec.Builder().setUri(uri).build());byte[] bytes=new byte[128*1024];
             while(!Thread.currentThread().isInterrupted()&&source.read(bytes,0,bytes.length)!=-1){}

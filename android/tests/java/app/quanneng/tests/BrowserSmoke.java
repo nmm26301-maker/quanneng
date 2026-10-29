@@ -70,7 +70,7 @@ public final class BrowserSmoke extends Instrumentation {
             SystemClock.sleep(1800);
             if(nativeStarts.get()!=0||browser.isFinishing())throw new AssertionError("Web playback or delayed detection launched the player without clicking transfer");
             await(web,"document.querySelector('#poster').complete&&document.querySelector('#poster').naturalWidth>0");
-            if(!deferred.get()||images.get()==0)throw new AssertionError("Fast loading did not defer then restore image resources");
+            if(deferred.get()||images.get()==0)throw new AssertionError("Default browser load delayed images or lost the poster");
             if(!"true".equals(js(web,"window.returnMarker='same-page';document.querySelector('#return-value').value='第12集保留';true")))throw new AssertionError("Cannot set return marker");
             int loadsBefore=pageLoads.get();String originalUrl=js(web,"location.href");
             ActivityMonitor playerMonitor=addMonitor("app.quanneng.SystemPlayerActivity",null,false);tap(browser.findViewById(1401));
@@ -97,7 +97,7 @@ public final class BrowserSmoke extends Instrumentation {
             if(!returned)throw new AssertionError("Error dialog did not offer return to existing page");awaitBrowser(browser);
             if(!originalUrl.equals(js(web,"location.href"))||pageLoads.get()!=loadsBefore)throw new AssertionError("Error return lost the page");
             runOnMainSync(()->browser.findViewById(1410).performClick());
-            if(getTargetContext().getSharedPreferences("browser",0).getBoolean("fast-loading",true))throw new AssertionError("Fast mode setting not persisted");
+            if(!getTargetContext().getSharedPreferences("browser",0).getBoolean("defer-images-v2",false))throw new AssertionError("Optional image deferral setting not persisted");
             runOnMainSync(()->browser.findViewById(1410).performClick());runOnMainSync(browser::finish);SystemClock.sleep(200);
             Activity app=open("app.quanneng.MainActivity",new Intent());WebView ui=(WebView)field(app,"web");await(ui,"!!document.querySelector('.bottom-nav')");
             await(ui,"JSON.parse(localStorage.getItem('quanneng-v2')||'[]').some(v=>v.name.includes('12')&&v.sourcePage.startsWith('https://page.fixture.test/'))");

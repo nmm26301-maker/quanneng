@@ -13,6 +13,7 @@ import androidx.webkit.*;
 import org.json.*;
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** 网页媒体观察；只接受候选数据，网页无法调用应用功能，Cookie 仅在本机内存使用。 */
@@ -22,12 +23,16 @@ public final class BrowserActivity extends PrivateActivity {
     private TextView note;
     private Button fastButton,floatingPlay;
     private ProgressBar pageProgress;
-    private boolean fastLoading=true;
+    private boolean fastLoading;
     private long pageEpoch;
     private JSONObject handedContext;
     private static final int WEB_PLAYER=1461;
     private final Map<String,JSONObject> playedContexts=new LinkedHashMap<>();
     private final Map<String,Long> recentMediaRequests=new LinkedHashMap<>();
+    private final ExecutorService postWorker=Executors.newSingleThreadExecutor();
+    private TransferRuntime.Token postToken;
+    private String attemptPage="",recognitionError="";
+    private boolean resolvingPost;
     private FrameLayout root;
     private LinearLayout content;
     private View customView;
@@ -54,9 +59,9 @@ public final class BrowserActivity extends PrivateActivity {
         EditText address=new EditText(this);address.setSingleLine();address.setTextSize(13);address.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_URI);address.setText(getIntent().getStringExtra("url"));toolbar.addView(address,new LinearLayout.LayoutParams(0,dp(56),1));
         Button go=new Button(this);go.setText("打开");go.setOnClickListener(v->{String u=address.getText().toString().trim();if(MainActivity.isHttps(u))web.loadUrl(u);else toast("请填写完整的 HTTPS 网页地址");});toolbar.addView(go);
         LinearLayout pageTools=new LinearLayout(this);pageTools.setPadding(dp(8),0,dp(8),0);content.addView(pageTools);
-        fastLoading=getSharedPreferences("browser",0).getBoolean("fast-loading",true);
+        fastLoading=getSharedPreferences("browser",0).getBoolean("defer-images-v2",false);
         fastButton=new Button(this);fastButton.setId(1410);pageTools.addView(fastButton,new LinearLayout.LayoutParams(0,dp(48),1));
-        fastButton.setOnClickListener(v->{fastLoading=!fastLoading;getSharedPreferences("browser",0).edit().putBoolean("fast-loading",fastLoading).apply();updateFastButton();if(!fastLoading)web.getSettings().setBlockNetworkImage(false);toast(fastLoading?"下次打开网页优先加载内容，图片稍后显示":"已切换完整加载");});updateFastButton();
+        fastButton.setOnClickListener(v->{fastLoading=!fastLoading;getSharedPreferences("browser",0).edit().putBoolean("defer-images-v2",fastLoading).apply();updateFastButton();if(!fastLoading)web.getSettings().setBlockNetworkImage(false);toast(fastLoading?"下次打开网页延后图片，节省流量":"已恢复图片即时加载");});updateFastButton();
         Button refresh=new Button(this);refresh.setText("刷新");refresh.setOnClickListener(v->web.reload());pageTools.addView(refresh,new LinearLayout.LayoutParams(dp(80),dp(48)));
         pageProgress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);pageProgress.setMax(100);content.addView(pageProgress,new LinearLayout.LayoutParams(-1,dp(3)));
         web=new WebView(this);content.addView(web,new LinearLayout.LayoutParams(-1,0,1));
@@ -80,10 +85,11 @@ public final class BrowserActivity extends PrivateActivity {
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView view,WebResourceRequest request){if(MainActivity.isHttps(request.getUrl().toString()))return false;toast("不支持此链接类型");return true;}
             @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap icon){resetDiscovery();address.setText(url);long epoch=++pageEpoch;pageProgress.setVisibility(View.VISIBLE);web.getSettings().setBlockNetworkImage(fastLoading);
-                handler.postDelayed(()->releaseImages(epoch),2500);}
+                if(fastLoading)handler.postDelayed(()->releaseImages(epoch),800);}
             @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
+                long age=SystemClock.elapsedRealtime()-webGestureAt;if(age<0||age>15000)return null;
                 String u=request.getUrl().toString();if(MainActivity.isHttps(u))requests.put(u,PlaybackHeaders.sanitize(request.getRequestHeaders()));
-                if(MediaCandidatePolicy.playable(u)&&SystemClock.elapsedRealtime()-webGestureAt<15000){
+                if(MediaCandidatePolicy.playable(u)){
                     long when=SystemClock.elapsedRealtime();handler.post(()->rememberMediaRequest(u,when));
                 }
                 return null;
@@ -112,7 +118,11 @@ public final class BrowserActivity extends PrivateActivity {
                     if(!sameOrigin(frame,origin))return;
                     if(frames.size()<64||frames.containsKey(frame))frames.put(frame,reply);
                     String kind=data.optString("kind"),session=data.optString("session");
-                    if("activate".equals(kind)&&SystemClock.elapsedRealtime()-webGestureAt<15000){
+                    if("attempt".equals(kind)&&SystemClock.elapsedRealtime()-webGestureAt<15000){
+                        String page=data.optString("page","");if(!sameOrigin(page,origin))return;
+                        attemptPage=page;recognitionError="";recognitionRequested=true;playing=true;activeFrame=frame;
+                        activeTitle=cleanTitle("",frame);updateCount();schedulePostResolve(page,frame,1200);
+                    }else if("activate".equals(kind)&&SystemClock.elapsedRealtime()-webGestureAt<15000){
                         media.clear();contexts.clear();activeFrame=frame;activeSession=session;activeTitle=cleanTitle(data.optString("title"),frame);playing=true;blob=false;encrypted=false;recognitionRequested=true;updateCount();
                         handler.postDelayed(()->{if(media.isEmpty())offerRecentMedia();},500);
                     }else if("source".equals(kind)&&frame.equals(activeFrame)&&session.equals(activeSession))collect(data.optString("url",""),null,frame,data.optString("mime",""),data.optBoolean("direct"));
@@ -141,7 +151,24 @@ public final class BrowserActivity extends PrivateActivity {
         if(!MainActivity.isHttps(frame))return false;Uri uri=Uri.parse(frame);
         return Objects.equals(uri.getHost(),origin.getHost())&&(uri.getPort()==-1?443:uri.getPort())==(origin.getPort()==-1?443:origin.getPort());
     }
-    private void resetDiscovery(){generation.incrementAndGet();media.clear();contexts.clear();frames.clear();requests.clear();recentMediaRequests.clear();playing=false;blob=false;encrypted=false;recognitionRequested=false;activeFrame="";activeSession="";activeTitle="";handingOff=false;webGestureAt=-60000;updateCount();}
+    private void resetDiscovery(){generation.incrementAndGet();if(postToken!=null)postToken.cancel();postToken=null;attemptPage="";recognitionError="";resolvingPost=false;media.clear();contexts.clear();frames.clear();requests.clear();recentMediaRequests.clear();playing=false;blob=false;encrypted=false;recognitionRequested=false;activeFrame="";activeSession="";activeTitle="";handingOff=false;webGestureAt=-60000;updateCount();}
+    private void schedulePostResolve(String page,String frame,long delay){
+        int current=generation.get();handler.postDelayed(()->{
+            if(current!=generation.get()||!privateReady()||encrypted||!media.isEmpty()||resolvingPost||!Objects.equals(page,attemptPage))return;
+            resolvingPost=true;recognitionError="";updateCount();TransferRuntime.Token token=new TransferRuntime.Token();postToken=token;
+            postWorker.execute(()->{
+                String found=null,failure=null;try{found=PostVideoResolver.resolve(this,page,token);}catch(Exception error){failure=error instanceof IOException?error.getMessage():"站点暂时不提供可直播放地址；可使用保存后播放";}
+                final String video=found,message=failure;handler.post(()->{
+                    if(current!=generation.get()||token!=postToken||isFinishing())return;
+                    resolvingPost=false;postToken=null;
+                    if(video!=null&&media.isEmpty()&&Objects.equals(activeFrame,frame))collect(video,null,frame,"",true);
+                    else if(media.isEmpty())recognitionError=message==null?"此帖子暂时无法解析，请在网页继续观看":message;
+                    updateCount();
+                });
+            });
+            handler.postDelayed(()->{if(token==postToken&&resolvingPost){token.cancel();postToken=null;resolvingPost=false;recognitionError="解析超时，请稍后重试或使用保存后播放";updateCount();}},30000);
+        },delay);
+    }
     private void rememberMediaRequest(String url,long when){
         if(when<webGestureAt||when-webGestureAt>15000||!privateReady())return;
         if(recentMediaRequests.size()>=16)recentMediaRequests.remove(recentMediaRequests.keySet().iterator().next());
@@ -159,15 +186,16 @@ public final class BrowserActivity extends PrivateActivity {
         final int seenOn=generation.get();
         HashMap<String,String> captured=PlaybackHeaders.sanitize(requestHeaders==null?requests.get(url):requestHeaders);
         runOnUiThread(()->{
-            if(isFinishing()||isDestroyed()||seenOn!=generation.get())return;
+            if(isFinishing()||isDestroyed()||!privateReady()||seenOn!=generation.get())return;
             if(!media.contains(url)&&media.size()<100)media.add(url);
             if(!media.contains(url))return;
+            recognitionError="";if(postToken!=null){postToken.cancel();postToken=null;resolvingPost=false;}
             JSONObject old=contexts.get(url);HashMap<String,String> headers=new HashMap<>();
             if(old!=null){JSONObject h=old.optJSONObject("headers");if(h!=null){Iterator<String> keys=h.keys();while(keys.hasNext()){String k=keys.next();headers.put(k,h.optString(k));}}}
             headers.putAll(captured);String page=frame!=null?frame:old!=null?old.optString("page",web.getUrl()):web.getUrl();
             if(!headers.containsKey("Referer")){String ref=PlaybackHeaders.referrer(page,url);if(!ref.isEmpty())headers.put("Referer",ref);}
             headers.put("User-Agent",web.getSettings().getUserAgentString());String cookie=CookieManager.getInstance().getCookie(url);if(cookie!=null)headers.put("Cookie",cookie);
-            try{JSONObject c=new JSONObject();c.put("url",url);c.put("page",web.getUrl());c.put("frame",page);c.put("title",activeTitle);String mime=MediaCandidatePolicy.mime(url,observedMime);if(mime.isEmpty()&&old!=null)mime=old.optString("mime","");c.put("mime",mime);c.put("headers",new JSONObject(PlaybackHeaders.sanitize(headers)));contexts.put(url,c);}catch(JSONException ignored){}
+            try{JSONObject c=new JSONObject();c.put("url",url);c.put("page",MainActivity.isHttps(attemptPage)?attemptPage:web.getUrl());c.put("frame",page);c.put("title",activeTitle);String mime=MediaCandidatePolicy.mime(url,observedMime);if(mime.isEmpty()&&old!=null)mime=old.optString("mime","");c.put("mime",mime);c.put("headers",new JSONObject(PlaybackHeaders.sanitize(headers)));contexts.put(url,c);}catch(JSONException ignored){}
             updateCount();
         });
     }
@@ -187,12 +215,13 @@ public final class BrowserActivity extends PrivateActivity {
         boolean available=!media.isEmpty()&&!encrypted&&!handingOff;
         mediaButton.setEnabled(available);floatingPlay.setEnabled(available);floatingPlay.setVisibility(customView!=null?View.VISIBLE:View.GONE);
         mediaButton.setText(handingOff?"正在打开播放器…":media.isEmpty()?"等待网页视频":"转到全能播放 · "+media.size()+" 条结果");
-        if(note!=null)note.setText(!advanced?"请先更新 Android 系统 WebView，才能识别你点播的视频。":encrypted?"此视频使用受保护媒体，请继续在原网页观看。":media.isEmpty()?(recognitionRequested?"暂未找到可独立播放的视频；请点“识别当前视频”重试。":"点播网页视频后自动识别；未出现结果可点“识别当前视频”。"):("已识别 "+media.size()+" 条，点“转到全能播放”选择；退出播放器回到原网页。"));
+        if(note!=null)note.setText(encrypted?"此视频使用受保护媒体，请继续在原网页观看。":resolvingPost?"正在解析当前帖子的视频地址…":!recognitionError.isEmpty()?recognitionError:!advanced?"网页组件不支持自动识别；可点“识别当前视频”尝试解析帖子。":media.isEmpty()?(recognitionRequested?"正在查找点播视频；可点“识别当前视频”重试。":"点播网页视频后自动识别；未出现结果可点“识别当前视频”。"):("已识别 "+media.size()+" 条，点“转到全能播放”选择；退出播放器回到原网页。"));
     }
     private void identify(){
         recognitionRequested=true;webGestureAt=SystemClock.elapsedRealtime();
         for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("scan");}catch(RuntimeException ignored){}
-        handler.postDelayed(()->{if(!isFinishing()&&privateReady()){updateCount();if(media.isEmpty())toast(encrypted?"受保护媒体请在原网页观看":"请先在网页中点播放，再点识别当前视频");}},700);
+        String page=MainActivity.isHttps(attemptPage)?attemptPage:web.getUrl();if(MainActivity.isHttps(page)){attemptPage=page;if(activeFrame.isEmpty())activeFrame=page;if(activeTitle.isEmpty())activeTitle=cleanTitle("",page);schedulePostResolve(page,activeFrame,900);}
+        handler.postDelayed(()->{if(!isFinishing()&&privateReady())updateCount();},700);
     }
     private void chooseMedia(){
         if(media.isEmpty()||encrypted)return;
@@ -215,7 +244,7 @@ public final class BrowserActivity extends PrivateActivity {
         try{startActivityForResult(intent,WEB_PLAYER);}catch(RuntimeException error){handingOff=false;updateCount();toast("播放器打开失败，请重试");}
     }
     private void releaseImages(long epoch){if(web!=null&&!isDestroyed()&&epoch==pageEpoch)web.getSettings().setBlockNetworkImage(false);}
-    private void updateFastButton(){fastButton.setText(fastLoading?"网页加速：开":"网页加速：关");fastButton.setSelected(fastLoading);}
+    private void updateFastButton(){fastButton.setText(fastLoading?"图片延后：开":"图片延后：关");fastButton.setSelected(fastLoading);}
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
         if(request==WEB_PLAYER){
@@ -236,6 +265,6 @@ public final class BrowserActivity extends PrivateActivity {
     @Override protected void onPause(){if(web!=null)web.onPause();super.onPause();}
     @Override protected void onResume(){super.onResume();if(web!=null&&privateReady())web.onResume();}
     @Override protected void onPrivateUnlocked(){if(web!=null)web.onResume();}
-    @Override protected void onPrivateLocked(){if(web!=null){web.onPause();web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause())",null);for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("pause");}catch(RuntimeException ignored){}}}
-    @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);hideCustomView();frames.clear();requests.clear();contexts.clear();if(web!=null)web.destroy();super.onDestroy();}
+    @Override protected void onPrivateLocked(){if(postToken!=null){postToken.cancel();postToken=null;resolvingPost=false;}if(web!=null){web.onPause();web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause())",null);for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("pause");}catch(RuntimeException ignored){}}}
+    @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);if(postToken!=null)postToken.cancel();postWorker.shutdownNow();hideCustomView();frames.clear();requests.clear();contexts.clear();if(web!=null)web.destroy();super.onDestroy();}
 }

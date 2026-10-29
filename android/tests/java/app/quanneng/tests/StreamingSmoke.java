@@ -23,6 +23,9 @@ public final class StreamingSmoke extends Instrumentation {
             check("AbCdEf123_-".equals(youtube.invoke(null,"https://www.youtube.com/watch?v=AbCdEf123_-")),"YouTube video URL rejected");
             check("AbCdEf123_-".equals(youtube.invoke(null,"https://youtu.be/AbCdEf123_-")),"YouTube short URL rejected");
             check(youtube.invoke(null,"https://www.youtube.com.evil.test/watch?v=AbCdEf123_-")==null,"Lookalike YouTube host accepted");
+            Method post=Class.forName("app.quanneng.PostVideoResolver").getDeclaredMethod("parse",String.class);post.setAccessible(true);
+            check("https://video.twimg.com/clip.mp4?tag=1".equals(post.invoke(null,"https://video.twimg.com/clip.mp4?tag=1\n")),"Single post video URL rejected");
+            boolean ambiguous=false;try{post.invoke(null,"https://video.twimg.com/one.mp4\nhttps://video.twimg.com/two.mp4");}catch(InvocationTargetException expected){ambiguous=true;}check(ambiguous,"Multiple unrelated post streams were silently selected");
             try(InputStream input=getContext().getAssets().open("buffer-fixture.mp4");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=input.read(b))!=-1)out.write(b,0,n);fixture=out.toByteArray();}
             policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),true);
             cacheChecks();
@@ -71,7 +74,11 @@ public final class StreamingSmoke extends Instrumentation {
         policy("clearCache",new Class<?>[]{Context.class},context());NativeNetwork network=new NativeNetwork();Object upstream=network.factory();Uri uri=Uri.parse("https://stream-fixture.invalid/range-"+System.nanoTime()+".mp4");Object cached=cached(uri,Collections.emptyMap(),upstream);
         check(Arrays.equals(read(cached,uri,0,fixture.length),fixture),"Initial cache content differs");int initial=network.opens.get();network.offline=true;
         Object reopened=cached(uri,Collections.emptyMap(),upstream);check(Arrays.equals(read(reopened,uri,100,4000),Arrays.copyOfRange(fixture,100,4100)),"Offline Range differs");check(network.opens.get()==initial,"Offline cache read reached network");
-        check(cached(uri,Collections.singletonMap("Cookie","private=yes"),upstream)==upstream,"Cookie source persisted");check(cached(uri,Collections.singletonMap("authorization","Basic private"),upstream)==upstream,"Authorization source persisted");check(cached(Uri.parse("content://app.quanneng.next.media/vault-open/a"),Collections.emptyMap(),upstream)==upstream,"Vault source persisted");
+        Map<String,String> cookie=Collections.singletonMap("Cookie","session=one");network.offline=false;
+        Object signed=cached(uri,cookie,upstream);check(signed!=upstream,"Cookie video was not eligible for app-private cache");check(Arrays.equals(read(signed,uri,0,fixture.length),fixture),"Cookie stream bytes differ");int signedOpens=network.opens.get();network.offline=true;
+        check(Arrays.equals(read(cached(uri,cookie,upstream),uri,64,2048),Arrays.copyOfRange(fixture,64,2112)),"Cookie cache offline Range differs");check(network.opens.get()==signedOpens,"Cookie cache hit contacted upstream");
+        boolean crossCookieBlocked=false;try{read(cached(uri,Collections.singletonMap("Cookie","session=two"),upstream),uri,0,256);}catch(InvocationTargetException expected){crossCookieBlocked=true;}check(crossCookieBlocked,"Different Cookie reused cached bytes");
+        check(cached(uri,Collections.singletonMap("authorization","Basic private"),upstream)==upstream,"Authorization source persisted");check(cached(Uri.parse("content://app.quanneng.next.media/vault-open/a"),Collections.emptyMap(),upstream)==upstream,"Vault source persisted");
         check(cached(Uri.parse("http://192.168.1.2/a.mp4"),Collections.emptyMap(),upstream)==upstream,"LAN source persisted");
         Object identity=cached(uri,Collections.singletonMap("Referer","https://other.invalid/"),upstream);boolean blocked=false;try{read(identity,uri,0,100);}catch(InvocationTargetException expected){blocked=true;}check(blocked,"Different source context reused cached bytes");
         policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),false);check(cached(uri,Collections.emptyMap(),upstream)==upstream,"Disabled cache still active");policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),true);
