@@ -11,15 +11,10 @@ final class PlayerGestures implements View.OnTouchListener {
   boolean ready();int position();int duration();void seek(int ms);void toggle();void tap();void feedback(String value);
   float speed();void speed(float value);float zoom();void zoomAt(float value,float x,float y);void pan(float dx,float dy);
  }
- private final Activity activity;private final Target target;private final GestureDetector taps;private final ScaleGestureDetector pinch;private final AudioManager audio;
- private float x,y,lastX,lastY,brightness,oldSpeed;private int pos,volume,axis,width,height;private boolean held,moved,multi;
+ private final Activity activity;private final Target target;private final GestureDetector taps;private final AudioManager audio;
+ private float x,y,lastX,lastY,lastSpan,lastFocusX,lastFocusY,brightness,oldSpeed;private int pos,volume,axis,width,height;private boolean held,moved,multi;
  PlayerGestures(Activity a,Target t){
   activity=a;target=t;audio=(AudioManager)a.getSystemService(Activity.AUDIO_SERVICE);
-  pinch=new ScaleGestureDetector(a,new ScaleGestureDetector.SimpleOnScaleGestureListener(){
-   @Override public boolean onScaleBegin(ScaleGestureDetector d){multi=true;releaseSpeed();return target.ready();}
-   @Override public boolean onScale(ScaleGestureDetector d){if(!target.ready())return false;target.zoomAt(target.zoom()*d.getScaleFactor(),d.getFocusX(),d.getFocusY());return true;}
-   @Override public void onScaleEnd(ScaleGestureDetector d){target.feedback("画面缩放 "+String.format(java.util.Locale.ROOT,"%.1f×",target.zoom()));}
-  });
   taps=new GestureDetector(a,new GestureDetector.SimpleOnGestureListener(){
    @Override public boolean onDown(MotionEvent e){return true;}
    @Override public boolean onSingleTapUp(MotionEvent e){if(multi)return false;target.tap();return true;}
@@ -35,7 +30,15 @@ final class PlayerGestures implements View.OnTouchListener {
   width=v.getWidth();height=v.getHeight();int action=e.getActionMasked();
   if(action==MotionEvent.ACTION_DOWN){x=lastX=e.getX();y=lastY=e.getY();pos=target.position();volume=audio.getStreamVolume(AudioManager.STREAM_MUSIC);brightness=activity.getWindow().getAttributes().screenBrightness;if(brightness<0)brightness=.5f;axis=0;moved=false;held=false;multi=false;}
   if(e.getPointerCount()>1||action==MotionEvent.ACTION_POINTER_DOWN){multi=true;axis=0;releaseSpeed();}
-  pinch.onTouchEvent(e);
+  if(e.getPointerCount()>=2){
+   float dx=e.getX(1)-e.getX(0),dy=e.getY(1)-e.getY(0),span=(float)Math.hypot(dx,dy);
+   float focusX=(e.getX(0)+e.getX(1))/2f,focusY=(e.getY(0)+e.getY(1))/2f;
+   if(action==MotionEvent.ACTION_MOVE&&target.ready()&&lastSpan>0){
+    target.zoomAt(target.zoom()*span/lastSpan,focusX,focusY);
+    target.pan(focusX-lastFocusX,focusY-lastFocusY);
+   }
+   lastSpan=span;lastFocusX=focusX;lastFocusY=focusY;
+  }else if(action==MotionEvent.ACTION_POINTER_UP){lastSpan=0;}
   if(!multi)taps.onTouchEvent(e);
   if(action==MotionEvent.ACTION_MOVE&&target.ready()&&!held&&!multi){
    float dx=e.getX()-x,dy=e.getY()-y;
@@ -47,7 +50,7 @@ final class PlayerGestures implements View.OnTouchListener {
    }
    lastX=e.getX();lastY=e.getY();
   }
-  if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){releaseSpeed();if(action==MotionEvent.ACTION_UP&&!multi&&axis==1&&target.ready())target.seek((int)Math.max(0,Math.min(target.duration(),pos+Math.round((e.getX()-x)/(6*activity.getResources().getDisplayMetrics().density))*1000L)));axis=0;}
+  if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){releaseSpeed();if(action==MotionEvent.ACTION_UP&&!multi&&axis==1&&target.ready())target.seek((int)Math.max(0,Math.min(target.duration(),pos+Math.round((e.getX()-x)/(6*activity.getResources().getDisplayMetrics().density))*1000L)));if(multi&&target.ready())target.feedback("画面缩放 "+String.format(java.util.Locale.ROOT,"%.1f×",target.zoom()));axis=0;lastSpan=0;}
   return true;
  }
 }
