@@ -45,8 +45,10 @@ run(*compiler,'-encoding','UTF-8','-source','8','-target','8','-classpath',class
 run(tools/'d8','--lib',platform,'--min-api','26','--output',build/'dex',*visible_files(build/'classes','*.class'),*[library/'classes.jar' for library in libraries])
 with zipfile.ZipFile(build/'base.apk','a',compression=zipfile.ZIP_DEFLATED) as apk:
  for dex in (build/'dex').glob('*.dex'):apk.write(dex,dex.name)
+ native_libraries={}
  for library in libraries:
-  for native in (library/'jni'/args.abi).glob('*.so'):apk.write(native,'lib/'+args.abi+'/'+native.name)
+  for native in (library/'jni'/args.abi).glob('*.so'):native_libraries[native.name]=native
+ for name,native in sorted(native_libraries.items()):apk.write(native,'lib/'+args.abi+'/'+name)
  whisper=build/'native'/args.abi/'libwhispercli.so'
  if not whisper.is_file():raise SystemExit('Missing whisper.cpp native binary for '+args.abi)
  apk.write(whisper,'lib/'+args.abi+'/'+whisper.name)

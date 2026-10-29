@@ -74,6 +74,9 @@ public final class StreamingSmoke extends Instrumentation {
         String captions=new String(java.nio.file.Files.readAllBytes(transcript.toPath()),"UTF-8");
         check(captions.startsWith("WEBVTT")&&captions.contains(" --> "),"Real speech did not yield synchronized VTT");
         check(captions.toLowerCase(Locale.ROOT).contains("country"),"Whisper did not recognize speech from video audio");
+        File translated=(File)call(Class.forName("app.quanneng.OfflineCaptionTranslator"),"translate",new Class<?>[]{Context.class,File.class,runtime,progress},context(),transcript,token,listener);
+        String chinese=new String(java.nio.file.Files.readAllBytes(translated.toPath()),"UTF-8");
+        check(chinese.startsWith("WEBVTT")&&chinese.contains(" --> ")&&chinese.matches("(?s).*[\\u4e00-\\u9fff].*"),"Actual speech captions were not translated to timed Chinese subtitles");
         transcript.delete();report("Bundled multilingual Whisper model decoded public speech audio to timed captions on-device");
     }
     private void report(String message){Bundle b=new Bundle();b.putString("stream",message+"\n");sendStatus(0,b);}

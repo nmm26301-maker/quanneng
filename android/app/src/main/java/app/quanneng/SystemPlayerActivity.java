@@ -192,7 +192,14 @@ public final class SystemPlayerActivity extends PrivateActivity {
         vaultIo.execute(()->{File translated=null;String message="";try{
                 VideoCaptions.Track track=null;if(page!=null)try{track=VideoCaptions.fetch(this,page,language,token);}catch(Exception error){token.check();}
                 if(track==null)track=new VideoCaptions.Track(SpeechSubtitle.transcribe(this,source,requestHeaders,duration,token,(percent,phase)->runOnUiThread(()->{if(subtitleToken==token&&epoch==mediaEpoch)translationState(phase+" · 点按取消",true);})),"en");
-                translated=track.language.equals(language)?track.file:CaptionTranslator.translate(this,track.file,track.language,language,token);
+                if(track.language.equals(language))translated=track.file;
+                else if("zh".equals(language)&&Build.VERSION.SDK_INT>=28){
+                    if(!"en".equals(track.language)){
+                        File english=SpeechSubtitle.transcribe(this,source,requestHeaders,duration,token,(percent,phase)->runOnUiThread(()->{if(subtitleToken==token&&epoch==mediaEpoch)translationState(phase+" · 点按取消",true);}));
+                        track.file.delete();track=new VideoCaptions.Track(english,"en");
+                    }
+                    translated=OfflineCaptionTranslator.translate(this,track.file,token,(percent,phase)->runOnUiThread(()->{if(subtitleToken==token&&epoch==mediaEpoch)translationState(phase+" · 点按取消",true);}));
+                }else translated=CaptionTranslator.translate(this,track.file,track.language,language,token);
                 if(translated!=track.file)track.file.delete();
             }catch(Exception error){message=error.getMessage()==null?"语音翻译失败，请稍后重试":error.getMessage();}
             final File result=translated;final String failure=message;runOnUiThread(()->{if(isFinishing()||isDestroyed()||subtitleToken!=token)return;subtitleToken=null;

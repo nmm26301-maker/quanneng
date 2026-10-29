@@ -10,7 +10,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -145,7 +145,7 @@ jobs:
             adb logcat -d -v brief > "$RUNNER_TEMP/share-logcat.txt"
             tail -n 120 "$RUNNER_TEMP/share-logcat.txt"
             grep -q QUANNENG_SHARE_OK "$RUNNER_TEMP/share-smoke.txt"
-            timeout 180s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.StreamingSmoke | tee "$RUNNER_TEMP/streaming-smoke.txt"
+            timeout 600s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.StreamingSmoke | tee "$RUNNER_TEMP/streaming-smoke.txt"
             adb logcat -d -v brief > "$RUNNER_TEMP/streaming-logcat.txt"
             grep -q QUANNENG_STREAMING_OK "$RUNNER_TEMP/streaming-smoke.txt"
             timeout 120s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.EpisodeSmoke | tee "$RUNNER_TEMP/episodes-smoke.txt"

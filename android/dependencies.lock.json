@@ -190,10 +190,10 @@
   },
   {
     "name": "kotlin-stdlib",
-    "version": "2.0.20",
-    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.0.20/kotlin-stdlib-2.0.20.jar",
+    "version": "2.4.10",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.4.10/kotlin-stdlib-2.4.10.jar",
     "extension": "jar",
-    "sha256": "fb169596659a518357c4b2c16f43dc75ab1c4980565ed4b4a317a050e5e39006"
+    "sha256": "4ec0293bc3751423b203f1d8493251c57c42e73eb6377a6b8560d0974ff0a6df"
   },
   {
     "name": "annotations",
@@ -306,5 +306,26 @@
     "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-datasource-okhttp/1.10.1/media3-datasource-okhttp-1.10.1.aar",
     "extension": "aar",
     "sha256": "7c33a4c5d6aee58d32462fa21720788c0f2e26dec10996964081fc23531a28e5"
+  },
+  {
+    "name": "kotlinx-coroutines-core-jvm",
+    "version": "1.10.2",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.10.2/kotlinx-coroutines-core-jvm-1.10.2.jar",
+    "extension": "jar",
+    "sha256": "5ca175b38df331fd64155b35cd8cae1251fa9ee369709b36d42e0a288ccce3fd"
+  },
+  {
+    "name": "kotlinx-coroutines-android",
+    "version": "1.10.2",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-android/1.10.2/kotlinx-coroutines-android-1.10.2.jar",
+    "extension": "jar",
+    "sha256": "e713f1f874244115a07571065cffa0f24f5e78300e9720fea16de3af1d75fd41"
+  },
+  {
+    "name": "foxlet",
+    "version": "0.5.0",
+    "url": "https://github.com/yinvoke/foxlet-translate/releases/download/v0.5.0/foxlet-v0.5.0.aar",
+    "extension": "aar",
+    "sha256": "5dbb384907d69c2aba129fd15dba30dda94ede0fa556dc6a167d041ee479ec0e"
   }
 ]
