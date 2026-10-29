@@ -65,10 +65,8 @@ public final class BrowserSmoke extends Instrumentation {
             }};addMonitor(handoff);
             AtomicReference<int[]> point=new AtomicReference<>();runOnMainSync(()->{int[] xy=new int[2];web.getLocationOnScreen(xy);float d=web.getResources().getDisplayMetrics().density;point.set(new int[]{xy[0]+(int)(90*d),xy[1]+(int)(60*d)});});
             int[] xy=point.get();tap(xy[0],xy[1]);
-            if(count(browser)!=0)throw new AssertionError("Playback recognized media before the native identify button");
-            runOnMainSync(()->browser.findViewById(1402).performClick());
             long deadline=SystemClock.elapsedRealtime()+15000;while(count(browser)==0&&SystemClock.elapsedRealtime()<deadline)SystemClock.sleep(100);
-            if(count(browser)==0)throw new AssertionError("Selected blob not identified after manual scan; advanced="+field(browser,"advanced")+", frame="+field(browser,"activeFrame"));
+            if(count(browser)==0)throw new AssertionError("Clicked blob not identified automatically; advanced="+field(browser,"advanced")+", frame="+field(browser,"activeFrame"));
             SystemClock.sleep(1800);
             if(nativeStarts.get()!=0||browser.isFinishing())throw new AssertionError("Web playback or delayed detection launched the player without clicking transfer");
             await(web,"document.querySelector('#poster').complete&&document.querySelector('#poster').naturalWidth>0");
@@ -104,7 +102,7 @@ public final class BrowserSmoke extends Instrumentation {
             Activity app=open("app.quanneng.MainActivity",new Intent());WebView ui=(WebView)field(app,"web");await(ui,"!!document.querySelector('.bottom-nav')");
             await(ui,"JSON.parse(localStorage.getItem('quanneng-v2')||'[]').some(v=>v.name.includes('12')&&v.sourcePage.startsWith('https://page.fixture.test/'))");
             if(nativeStarts.get()!=2)throw new AssertionError("History synchronization started a video automatically");removeMonitor(handoff);
-            report("Manual transfer only; actual decoded completion and back preserve original URL, DOM and form state without reload; fast image defer/restore and title history verified");
+            report("Click playback identifies the selected video; manual transfer only; decoded completion and back preserve original URL, DOM and form state without reload");
             if(!"true".equals(js(ui,"!document.body.innerText.includes('AI')&&typeof window.Quanneng.requestAI==='undefined'")))throw new AssertionError("AI feature or bridge remains");
             js(ui,"Array.from(document.querySelectorAll('.bottom-nav button')).find(b=>b.textContent.includes('网址收藏')).click();true");await(ui,"!!document.querySelector('.bookmark-intro')");
             js(ui,"document.querySelector('.bookmark-intro button').click();true");await(ui,"!!document.querySelector('dialog[open]')");

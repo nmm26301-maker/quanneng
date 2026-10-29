@@ -41,6 +41,14 @@ test('native user gesture arms embedded playback and encrypted events are explic
  assert.equal(f.messages.filter(x=>x.kind==='source').length,1);assert.ok(f.messages.some(x=>x.kind==='status'&&x.encrypted));
 });
 
+test('manual scan recovers an already playing video without a captured play event',()=>{
+ const f=fixture(),video={...f.video('https://media.example/late.mp4'),muted:false,ended:false};
+ f.context.document.querySelectorAll=()=>[video];
+ f.context.QuannengMedia.onmessage({data:'scan'});
+ assert.deepEqual(f.messages.filter(x=>x.kind==='source').map(x=>x.url),['https://media.example/late.mp4']);
+ assert.equal(f.messages.filter(x=>x.kind==='activate').length,1);
+});
+
 test('reusing one video element for the next episode replaces source session and title',()=>{
  const f=fixture(),video=f.video('https://media.example/ep12.mp4');f.events.pointerdown({isTrusted:true});f.events.play({target:video});
  video.currentSrc='https://media.example/ep13.mp4';f.context.document.title='我的剧 第13集';f.events.pointerdown({isTrusted:true});f.events.play({target:video});

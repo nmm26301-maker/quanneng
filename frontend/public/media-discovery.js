@@ -23,7 +23,12 @@
     seen.add(url.href);report({kind: 'source', url: url.href, mime, title: title(active), direct});
   }
   function scan() {
-    if (!active) return;
+    if (!active) {
+      const playing = [...document.querySelectorAll('video')].filter(v => !v.paused && !v.ended);
+      active = playing.find(v => !v.muted) || (playing.length === 1 ? playing[0] : null);
+      if (!active) return;
+      serial++; seen = new Set(); report({kind: 'activate', title: title(active)});
+    }
     const src = active.currentSrc || active.src || '';
     const mapped = objects.get(src);
     if (mapped) candidate(mapped.url, mapped.type, true);
