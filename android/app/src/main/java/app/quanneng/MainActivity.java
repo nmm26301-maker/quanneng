@@ -203,7 +203,7 @@ public final class MainActivity extends PrivateActivity {
             }
         } else if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
             Uri uri = intent.getData();
-            if ("content".equals(uri.getScheme())) startActivityForResult(new Intent(this,SystemPlayerActivity.class).setData(uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),NATIVE_PLAYER);
+            if ("content".equals(uri.getScheme())) startActivityForResult(new Intent(this,SystemPlayerActivity.class).setData(uri).putExtra("sourcePage",intent.getStringExtra("sourcePage")).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),NATIVE_PLAYER);
         }
     }
     @Override public void onBackPressed() {

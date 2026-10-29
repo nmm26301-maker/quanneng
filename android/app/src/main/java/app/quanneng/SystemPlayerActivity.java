@@ -27,7 +27,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private android.window.OnBackInvokedCallback backCallback;
     private MatureVideoView video;
     private View touchLayer;
-    private LinearLayout root,header,controls,overlayHeader,details,fullscreenJumps;
+    private LinearLayout root,header,controls,overlayHeader,details,fullscreenJumps,quickTools;
     private ScrollView detailScroll;
     private FrameLayout videoFrame;
     private TextView title,overlayTitle,overlayClock,position,total,pointALabel,pointBLabel,jumpFeedback;
@@ -38,7 +38,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private Button loopButton,speedButton,jumpSettings;
     private int[] jumpValues=JumpSteps.DEFAULTS.clone();
     private ImageButton playButton,fullButton,screenLockButton,unlockTouchButton;
-    private Button rotateButton,zoomButton,zoomDetail;
+    private Button rotateButton,zoomButton,zoomDetail,zoomQuick,translationQuick,translationDetail;
     private final float[] zoomLevels={1f,1.25f,1.5f,2f};
     private int zoomIndex;
     private boolean portraitFullscreen;
@@ -95,7 +95,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
         loading=new ProgressBar(this);loading.setIndeterminateTintList(ColorStateList.valueOf(PlayerUi.ACCENT));videoFrame.addView(loading,new FrameLayout.LayoutParams(dp(36),dp(36),Gravity.CENTER));
         touchLayer=new View(this);touchLayer.setId(1010);touchLayer.setContentDescription("显示或隐藏播放控制");touchLayer.setFocusable(true);videoFrame.addView(touchLayer,new FrameLayout.LayoutParams(-1,-1));touchLayer.setOnClickListener(v->{if(fullscreen)setChrome(!chromeVisible);});
         touchLayer.setOnTouchListener(new PlayerGestures(this,new PlayerGestures.Target(){public boolean ready(){return SystemPlayerActivity.this.ready;}public int position(){return video.getCurrentPosition();}public int duration(){return video.getDuration();}public void seek(int ms){clearLoop();seekExact(ms);setChrome(true);}public void toggle(){togglePlay();}public void tap(){if(fullscreen)setChrome(!chromeVisible);}public void feedback(String s){showJumpFeedback(s);}public float speed(){return selectedSpeed;}public void speed(float f){if(media!=null){try{media.setSpeed(f,1f);selectedSpeed=f;speedButton.setText(f+"×");}catch(RuntimeException ignored){}}}}));
-        buildControls();buildDetails();buildOverlayHeader();
+        buildControls();buildQuickTools();buildDetails();buildOverlayHeader();
         jumpFeedback=PlayerUi.text(this,"",14,PlayerUi.TEXT);jumpFeedback.setId(1300);jumpFeedback.setGravity(Gravity.CENTER);jumpFeedback.setPadding(dp(18),dp(12),dp(18),dp(12));jumpFeedback.setBackground(PlayerUi.surface(this,0xEF14251E,16));jumpFeedback.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);jumpFeedback.setVisibility(View.GONE);videoFrame.addView(jumpFeedback,new FrameLayout.LayoutParams(-2,-2,Gravity.CENTER));
         touchShield=new View(this);touchShield.setId(1311);touchShield.setVisibility(View.GONE);touchShield.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);touchShield.setOnTouchListener((v,event)->{if(event.getActionMasked()==MotionEvent.ACTION_UP)lockedHint();return true;});videoFrame.addView(touchShield,new FrameLayout.LayoutParams(-1,-1));
         unlockTouchArea=new LinearLayout(this);unlockTouchArea.setOrientation(1);unlockTouchArea.setGravity(Gravity.CENTER);unlockTouchArea.setPadding(dp(4),dp(4),dp(4),dp(4));unlockTouchArea.setBackground(PlayerUi.surface(this,0x66000000,16));unlockTouchArea.setVisibility(View.GONE);videoFrame.addView(unlockTouchArea,new FrameLayout.LayoutParams(dp(76),dp(88),Gravity.END|Gravity.CENTER_VERTICAL));
@@ -123,6 +123,12 @@ public final class SystemPlayerActivity extends PrivateActivity {
         speedButton=PlayerUi.chip(this,"1.0×");buttons.addView(speedButton,new LinearLayout.LayoutParams(dp(56),dp(48)));speedButton.setContentDescription("选择播放速度");speedButton.setOnClickListener(v->chooseSpeed());
         fullButton=PlayerUi.icon(this,"fullscreen","进入全屏",false);fullButton.setId(1005);LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(dp(48),dp(48));fp.leftMargin=dp(4);buttons.addView(fullButton,fp);fullButton.setOnClickListener(v->setFullscreen(!fullscreen));
     }
+    private String youtubePage(){String page=getIntent().getStringExtra("sourcePage");if(YouTubeSubtitle.isYouTube(page))return page;page=getIntent().getDataString();return YouTubeSubtitle.isYouTube(page)?page:null;}
+    private void buildQuickTools(){
+        quickTools=new LinearLayout(this);quickTools.setGravity(Gravity.CENTER_VERTICAL);quickTools.setPadding(dp(12),0,dp(12),0);root.addView(quickTools,new LinearLayout.LayoutParams(-1,dp(56)));
+        zoomQuick=PlayerUi.chip(this,"放大画面 · 1×");zoomQuick.setId(1320);zoomQuick.setContentDescription("放大视频画面，当前 1 倍");addWeighted(quickTools,zoomQuick,48);zoomQuick.setOnClickListener(v->cycleZoom());
+        String page=youtubePage();if(page!=null){translationQuick=PlayerUi.chip(this,"油管中文字幕");translationQuick.setId(1318);addWeighted(quickTools,translationQuick,48);translationQuick.setOnClickListener(v->fetchYouTubeSubtitle(page));}
+    }
     private void buildDetails(){
         detailScroll=new ScrollView(this);detailScroll.setId(1008);detailScroll.setFillViewport(false);root.addView(detailScroll,new LinearLayout.LayoutParams(-1,0,1));
         details=new LinearLayout(this);details.setOrientation(1);details.setPadding(dp(16),dp(20),dp(16),dp(24));detailScroll.addView(details);
@@ -140,7 +146,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
         LinearLayout extras=row(details);Button sub=PlayerUi.chip(this,"导入字幕");addWeighted(extras,sub,48);sub.setOnClickListener(v->openSubtitles());Button reset=PlayerUi.chip(this,"重置取点");addWeighted(extras,reset,48);reset.setOnClickListener(v->{pointA=pointB=0;clearLoop();updatePoints();});
         LinearLayout features=card("播放工具","字幕、画面缩放、投屏与接力都在这里");
         zoomDetail=PlayerUi.chip(this,"画面缩放 · 1×");zoomDetail.setId(1316);features.addView(zoomDetail,new LinearLayout.LayoutParams(-1,dp(52)));zoomDetail.setOnClickListener(v->cycleZoom());
-        String youtubePage=getIntent().getStringExtra("sourcePage");if(YouTubeSubtitle.isYouTube(youtubePage)){Button translate=PlayerUi.chip(this,"获取油管中文字幕");translate.setId(1317);features.addView(translate,new LinearLayout.LayoutParams(-1,dp(52)));translate.setOnClickListener(v->fetchYouTubeSubtitle(translate,youtubePage));}
+        String youtubePage=youtubePage();if(youtubePage!=null){translationDetail=PlayerUi.chip(this,"获取油管中文字幕");translationDetail.setId(1317);features.addView(translationDetail,new LinearLayout.LayoutParams(-1,dp(52)));translationDetail.setOnClickListener(v->fetchYouTubeSubtitle(youtubePage));}
         Button center=PlayerUi.chip(this,"字幕中心 / 调整偏移与字号");features.addView(center,new LinearLayout.LayoutParams(-1,dp(52)));center.setOnClickListener(v->startActivityForResult(new Intent(this,SubtitleActivity.class).putExtra("pick",true),45));
         for(String kind:new String[]{"cast","handoff","diagnostics","gestures"}){Button actionButton=PlayerUi.chip(this,"cast".equals(kind)?"电视投屏":"handoff".equals(kind)?"分享接力":"diagnostics".equals(kind)?"播放诊断":"手势设置");features.addView(actionButton,new LinearLayout.LayoutParams(-1,dp(52)));actionButton.setOnClickListener(v->{if("handoff".equals(kind)){HandoffActivity.share(this,current.toString(),video.getCurrentPosition());return;}Class<?> screen="cast".equals(kind)?CastActivity.class:"diagnostics".equals(kind)?DiagnosticsActivity.class:GestureSettingsActivity.class;startActivity(new Intent(this,screen).putExtra("url",current.toString()));});}
         TextView hint=PlayerUi.text(this,"全屏轻点显示透明控制。进度条左右拖动按秒定位，上移慢调，松手生效；点按轨道可快速跳转。返回键先退出全屏。",12,PlayerUi.MUTED);hint.setLineSpacing(dp(4),1);hint.setPadding(dp(4),dp(16),dp(4),0);details.addView(hint);
@@ -171,19 +177,20 @@ public final class SystemPlayerActivity extends PrivateActivity {
         FrameLayout.LayoutParams feedback=(FrameLayout.LayoutParams)jumpFeedback.getLayoutParams();feedback.gravity=fullscreen?Gravity.CENTER:Gravity.TOP|Gravity.CENTER_HORIZONTAL;feedback.topMargin=fullscreen?0:Math.max(dp(16),(int)((width-dp(24))*9f/32f)-dp(24));jumpFeedback.setLayoutParams(feedback);
         controls.setBackground(fullscreen?new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0x00000000,0x99000000}):PlayerUi.surface(this,PlayerUi.SURFACE,0));
     }
-    private void cycleZoom(){zoomIndex=(zoomIndex+1)%zoomLevels.length;video.setZoom(zoomLevels[zoomIndex]);String level=zoomLevels[zoomIndex]==1f?"1×":zoomLevels[zoomIndex]+"×";zoomButton.setText(level);zoomDetail.setText("画面缩放 · "+level);showJumpFeedback("画面缩放 "+level);}
-    private void fetchYouTubeSubtitle(Button button,String page){
+    private void cycleZoom(){zoomIndex=(zoomIndex+1)%zoomLevels.length;video.setZoom(zoomLevels[zoomIndex]);String level=zoomLevels[zoomIndex]==1f?"1×":zoomLevels[zoomIndex]+"×";zoomButton.setText(level);zoomDetail.setText("画面缩放 · "+level);zoomQuick.setText("放大画面 · "+level);zoomQuick.setContentDescription("放大视频画面，当前 "+level);showJumpFeedback("画面缩放 "+level);}
+    private void translationState(String label,boolean enabled){if(translationQuick!=null){translationQuick.setText(label);translationQuick.setEnabled(enabled);}if(translationDetail!=null){translationDetail.setText(label);translationDetail.setEnabled(enabled);}}
+    private void fetchYouTubeSubtitle(String page){
         if(subtitleToken!=null||!privateReady())return;
         TransferRuntime.Token token=new TransferRuntime.Token();subtitleToken=token;long epoch=mediaEpoch;
-        button.setEnabled(false);button.setText("正在获取中文翻译字幕…");
+        translationState("正在获取中文字幕…",false);
         vaultIo.execute(()->{File translated=null;try{translated=YouTubeSubtitle.fetch(this,page,token);}catch(Exception ignored){}
-            final File result=translated;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;subtitleToken=null;button.setEnabled(true);
-                if(result==null){button.setText("重试获取油管中文字幕");whenUnlocked(()->toast("没有获取到中文字幕；此视频可能没有字幕、翻译不可用或来源受限"));return;}
-                button.setText("已获取 · 重新翻译");whenUnlocked(()->{if(epoch!=mediaEpoch)return;activeSubtitle=result.getName();subtitleStamp="";PlaybackHistory.subtitle(this,current.toString(),activeSubtitle);applyRememberedSubtitle();toast("油管中文字幕已加载");});
+            final File result=translated;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;subtitleToken=null;
+                if(result==null){translationState("重试油管中文字幕",true);whenUnlocked(()->toast("没有获取到中文字幕；此视频可能没有字幕、翻译不可用或来源受限"));return;}
+                translationState("中文字幕已加载 · 重试",true);whenUnlocked(()->{if(epoch!=mediaEpoch)return;activeSubtitle=result.getName();subtitleStamp="";PlaybackHistory.subtitle(this,current.toString(),activeSubtitle);applyRememberedSubtitle();toast("油管中文字幕已加载");});
             });});
     }
     private void setFullscreen(boolean value){
-        fullscreen=value;header.setVisibility(value?View.GONE:View.VISIBLE);detailScroll.setVisibility(value?View.GONE:View.VISIBLE);setChrome(true);PlayerUi.setIcon(fullButton,value?"collapse":"fullscreen",value?"退出全屏":"进入全屏",false);
+        fullscreen=value;header.setVisibility(value?View.GONE:View.VISIBLE);quickTools.setVisibility(value?View.GONE:View.VISIBLE);detailScroll.setVisibility(value?View.GONE:View.VISIBLE);setChrome(true);PlayerUi.setIcon(fullButton,value?"collapse":"fullscreen",value?"退出全屏":"进入全屏",false);
         setRequestedOrientation(value?(portraitFullscreen?ActivityInfo.SCREEN_ORIENTATION_PORTRAIT:ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE):ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);applySystemBars();sizePlayer();root.post(this::sizePlayer);scheduleHide();
     }
     private void applySystemBars(){
@@ -293,7 +300,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
             if(i==0)new PrivateDialogBuilder(this).setTitle("新策略在下次打开视频时生效").setSingleChoiceItems(PlaybackPipeline.PROFILES,PlaybackPipeline.profile(this),(choice,p)->{PlaybackPipeline.profile(this,p);choice.dismiss();toast("播放策略已保存，下次打开视频生效");}).setNegativeButton("取消",null).show();
             else if(i==1){PlaybackPipeline.cacheSelected(this,!PlaybackPipeline.cacheSelected(this));toast("缓存设置已保存，下次打开视频生效");}
             else vaultIo.execute(()->{try{PlaybackPipeline.clearCache(this);runOnUiThread(()->whenUnlocked(()->toast("视频缓存已清理")));}catch(java.io.IOException e){runOnUiThread(()->whenUnlocked(()->toast("缓存正忙，请稍后重试")));}});
-        }).setPositiveButton("完成",null).setNeutralButton("功能说明",(d,w)->new PrivateDialogBuilder(this).setTitle("缓冲与缓存").setMessage("默认流畅优先，尽量提前缓冲至 120 秒，受网速、视频码率与内存上限影响。\n自动清晰度需要视频源提供多档画质，普通 MP4 无法凭空降码率。\n公共 HTTPS 普通视频会预取到片尾，播放完成后清理本条缓存；中途退出时缓存保留，可手动清理，也可能被系统回收。登录来源、NAS、本地和保险箱视频不写入此缓存。\n直播清单每次从源站刷新，缓存不等于完整下载。弱网自动重试，失效地址仍需重新获取。").setPositiveButton("知道了",null).show()).show();
+        }).setPositiveButton("完成",null).setNeutralButton("功能说明",(d,w)->new PrivateDialogBuilder(this).setTitle("缓冲与缓存").setMessage("默认流畅优先，尽量提前缓冲至 120 秒，受网速、视频码率与内存上限影响。\n自动清晰度需要视频源提供多档画质，普通 MP4 无法凭空降码率。\n公共 HTTPS 普通视频会预取到片尾，播放完成后清理本条缓存；中途退出时缓存保留，可手动清理，也可能被系统回收。带 Cookie 的 HTTPS 视频按请求上下文隔离缓存；NAS、本地和保险箱视频不写入此缓存。\n直播清单每次从源站刷新，缓存不等于完整下载。弱网自动重试，失效地址仍需重新获取。").setPositiveButton("知道了",null).show()).show();
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);whenUnlocked(()->handleSubtitleResult(request,result,data));
