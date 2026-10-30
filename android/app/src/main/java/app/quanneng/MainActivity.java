@@ -191,7 +191,7 @@ public final class MainActivity extends PrivateActivity {
                         try{pendingMedia.put("name",c.optString("title","当前点播视频"));pendingMedia.put("sourcePage",c.optString("page",""));pendingMedia.put("mime",c.optString("mime",""));pendingMedia.put("forceNative",true);}catch(JSONException ignored){}
                     }else if(java.util.regex.Pattern.compile("(?i)\\.(mp4|m3u8|mpd|webm|m4v|mov|mkv)(?:[?#]|$)").matcher(url).find()) {
                         try {launchMedia(new JSONObject().put("url",url));} catch(JSONException ignored) {}
-                    } else pendingUrl=url;
+                    } else {openBrowser(url);return;}
                 }
             }
         } else if (Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())) {
@@ -203,7 +203,7 @@ public final class MainActivity extends PrivateActivity {
             }
         } else if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
             Uri uri = intent.getData();
-            if ("content".equals(uri.getScheme())) startActivityForResult(new Intent(this,SystemPlayerActivity.class).setData(uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),NATIVE_PLAYER);
+            if ("content".equals(uri.getScheme())) startActivityForResult(new Intent(this,SystemPlayerActivity.class).setData(uri).putExtra("sourcePage",intent.getStringExtra("sourcePage")).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),NATIVE_PLAYER);
         }
     }
     @Override public void onBackPressed() {

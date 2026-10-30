@@ -7,7 +7,7 @@ function fixture(){
  const messages=[],events={};let response;
  class LocalURL extends URL {static createObjectURL(){return 'blob:https://frame.example/'+Math.random();}static revokeObjectURL(){}}
  class XHR{addEventListener(event,fn){this.listener=fn;}send(){this.status=200;this.responseURL='https://media.example/unrelated';this.listener();}getResponseHeader(){return 'video/mp4';}}
- const context={URL:LocalURL,Set,Map,WeakMap,Date,XMLHttpRequest:XHR,location:{href:'https://frame.example/player',hostname:'frame.example'},document:{title:'我的剧 第12集',querySelector:()=>null,querySelectorAll:()=>[],addEventListener:(name,fn)=>events[name]=fn},performance:{getEntriesByType:()=>[{name:'https://media.example/other.mp4'}]}};
+ const context={URL:LocalURL,Set,Map,WeakMap,Date,XMLHttpRequest:XHR,location:{href:'https://frame.example/player',hostname:'frame.example',host:'frame.example'},document:{title:'我的剧 第12集',querySelector:()=>null,querySelectorAll:()=>[],addEventListener:(name,fn)=>events[name]=fn},performance:{getEntriesByType:()=>[{name:'https://media.example/other.mp4'}]}};
  context.window=context;context.fetch=()=>Promise.resolve(response);context.QuannengMedia={postMessage:raw=>messages.push(JSON.parse(raw))};vm.runInNewContext(script,context);
  const video=(src)=>({tagName:'VIDEO',currentSrc:src,paused:false,querySelector:()=>null,getAttribute:()=>null});
  return {context,messages,events,video,fetch:async(url,type='video/mp4')=>{response={ok:true,url,headers:{get:()=>type},blob:async()=>({})};return context.fetch(url);}};
@@ -39,6 +39,23 @@ test('MSE request observation is limited to the user playback window and exclude
 test('native user gesture arms embedded playback and encrypted events are explicit',()=>{
  const f=fixture();f.context.QuannengMedia.onmessage({data:'gesture'});const video=f.video('https://media.example/12.mp4');f.events.play({target:video});f.events.encrypted({target:video});
  assert.equal(f.messages.filter(x=>x.kind==='source').length,1);assert.ok(f.messages.some(x=>x.kind==='status'&&x.encrypted));
+});
+
+test('manual scan recovers an already playing video without a captured play event',()=>{
+ const f=fixture(),video={...f.video('https://media.example/late.mp4'),muted:false,ended:false};
+ f.context.document.querySelectorAll=()=>[video];
+ f.context.QuannengMedia.onmessage({data:'scan'});
+ assert.deepEqual(f.messages.filter(x=>x.kind==='source').map(x=>x.url),['https://media.example/late.mp4']);
+ assert.equal(f.messages.filter(x=>x.kind==='activate').length,1);
+});
+
+test('a trusted post play click reports that specific post for fallback extraction',()=>{
+ const f=fixture(),post={href:'https://frame.example/user/status/1234'};
+ const target={closest:selector=>selector==='article'?{querySelector:()=>post}:{tagName:'BUTTON',getAttribute:()=>'',className:'play',textContent:'Play video'}};
+ f.events.click({isTrusted:true,target});
+ assert.equal(f.messages.find(x=>x.kind==='attempt')?.page,post.href);
+ f.events.click({isTrusted:false,target});
+ assert.equal(f.messages.filter(x=>x.kind==='attempt').length,1);
 });
 
 test('reusing one video element for the next episode replaces source session and title',()=>{

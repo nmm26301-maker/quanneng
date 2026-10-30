@@ -35,12 +35,16 @@ import java.util.concurrent.TimeUnit;
 /** Media3 官方缓存、连接复用、缓冲和错误恢复的统一入口；本地/私密源不落入网络缓存。 */
 final class PlaybackPipeline {
     static final String[] PROFILES={"均衡 · 提前缓冲最多 60 秒","流畅优先 · 提前缓冲最多 120 秒","省流量 · 优先 720p 以下"};
-    static final long CACHE_LIMIT=512L*1024*1024;
+    static final long CACHE_LIMIT=Long.MAX_VALUE;
     private static final okhttp3.OkHttpClient HTTP=new okhttp3.OkHttpClient.Builder()
         .connectTimeout(10,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS)
         .retryOnConnectionFailure(true).followSslRedirects(false).build();
     private static SimpleCache cache;
+    private static final java.util.concurrent.ExecutorService PREFETCH=java.util.concurrent.Executors.newCachedThreadPool(r->{Thread t=new Thread(r,"quanneng-prefetch");t.setDaemon(true);return t;});
     private final DataSource.Factory upstream,media;
+    private final String cacheIdentity;
+    private final Set<String> sessionKeys=java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private java.util.concurrent.Future<?> prefetchTask;
     final boolean cacheEnabled;
     final int activeProfile;
     PlaybackPipeline(Context context,Uri uri,Map<String,String> headers)throws IOException{
@@ -49,7 +53,7 @@ final class PlaybackPipeline {
         String auth=null;for(Map.Entry<String,String> h:headers.entrySet())if(h.getKey().equalsIgnoreCase("Authorization"))auth=h.getValue();
         if(auth!=null){final String credential=auth;final java.net.URL origin=NetworkPolicy.url(uri.toString());requests=()->new NasDataSource(origin,credential);}
         upstream=new DefaultDataSource.Factory(context,requests);
-        media=cacheFactory(context,uri,headers,upstream);cacheEnabled=media!=upstream;
+        cacheIdentity=new TreeMap<>(headers).toString();media=cacheFactory(context,uri,headers,upstream,sessionKeys);cacheEnabled=media!=upstream;
     }
     private static SharedPreferences prefs(Context c){return c.getSharedPreferences("streaming",Context.MODE_PRIVATE);}
     static int profile(Context c){return Math.max(0,Math.min(2,prefs(c).getInt("profile",1)));}
@@ -58,7 +62,7 @@ final class PlaybackPipeline {
     static void cacheSelected(Context c,boolean value){prefs(c).edit().putBoolean("cache",value).apply();}
     static boolean cacheEligible(Uri uri,Map<String,String> headers){
         if(!"https".equalsIgnoreCase(uri.getScheme()))return false;
-        for(String name:headers.keySet())if(name.equalsIgnoreCase("Authorization")||name.equalsIgnoreCase("Cookie")||name.equalsIgnoreCase("Proxy-Authorization"))return false;
+        for(String name:headers.keySet())if(name.equalsIgnoreCase("Authorization")||name.equalsIgnoreCase("Proxy-Authorization"))return false;
         return true;
     }
     private static synchronized SimpleCache cache(Context c)throws IOException{
@@ -72,11 +76,14 @@ final class PlaybackPipeline {
     }
     /** 工厂参数便于不同网络实现共用同一缓存，拒绝将 URL 或请求上下文明文用作索引键。 */
     static DataSource.Factory cacheFactory(Context c,Uri uri,Map<String,String> headers,DataSource.Factory source){
+        return cacheFactory(c,uri,headers,source,null);
+    }
+    private static DataSource.Factory cacheFactory(Context c,Uri uri,Map<String,String> headers,DataSource.Factory source,Set<String> keys){
         if(!cacheSelected(c)||!cacheEligible(uri,headers))return source;
         try{
             final String identity=new TreeMap<>(headers).toString();
             return new CacheDataSource.Factory().setCache(cache(c)).setUpstreamDataSourceFactory(source)
-                .setCacheKeyFactory(spec->cacheKey(spec,identity)).setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
+                .setCacheKeyFactory(spec->{String key=cacheKey(spec,identity);if(keys!=null)keys.add(key);return key;}).setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
         }catch(IOException|RuntimeException unavailable){android.util.Log.w("Quanneng","视频缓存不可用，回退网络播放");return source;}
     }
     static String cacheKey(DataSpec spec,String identity){
@@ -87,6 +94,28 @@ final class PlaybackPipeline {
     }
     static synchronized long cacheBytes(){return cache==null?0:cache.getCacheSpace();}
     static synchronized void clearCache(Context c)throws IOException{SimpleCache store=cache(c);for(String key:new HashSet<>(store.getKeys()))store.removeResource(key);}
+    /** 只对可连续读取的普通视频预取；分段流由播放器按选中清晰度缓存。 */
+    boolean prefetchEligible(Uri uri,String mime){
+        return cacheEnabled&&"https".equalsIgnoreCase(uri.getScheme())&&
+            ("video/mp4".equals(mime)||"video/webm".equals(mime)||"video/x-matroska".equals(mime));
+    }
+    synchronized void prefetch(Uri uri,String mime){
+        if(prefetchTask!=null||!prefetchEligible(uri,mime))return;
+        prefetchTask=PREFETCH.submit(()->{DataSource source=media.createDataSource();try{
+            source.open(new DataSpec.Builder().setUri(uri).build());byte[] bytes=new byte[128*1024];
+            while(!Thread.currentThread().isInterrupted()&&source.read(bytes,0,bytes.length)!=-1){}
+        }catch(IOException|RuntimeException ignored){}finally{try{source.close();}catch(IOException ignored){}}});
+    }
+    synchronized void stopPrefetch(){if(prefetchTask!=null){prefetchTask.cancel(true);prefetchTask=null;}}
+    void completed(Uri uri){
+        if(!cacheEnabled)return;
+        java.util.concurrent.Future<?> pending; synchronized(this){pending=prefetchTask;stopPrefetch();}
+        PREFETCH.execute(()->{if(pending!=null)try{pending.get(20,TimeUnit.SECONDS);}catch(Exception ignored){}
+            sessionKeys.add(cacheKey(new DataSpec.Builder().setUri(uri).build(),cacheIdentity));
+            for(String key:new HashSet<>(sessionKeys))for(int attempt=0;attempt<5;attempt++)try{cache.removeResource(key);break;}catch(RuntimeException busy){
+                try{Thread.sleep(500);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();return;}
+            }});
+    }
     static DefaultLoadControl loadControl(Context c,boolean network){
         if(!network)return new DefaultLoadControl();
         int p=profile(c),min=p==1?30000:15000,max=p==1?120000:60000;

@@ -12,6 +12,7 @@ for f in [tools/'aapt2',tools/'zipalign',tools/'apksigner',tools/'d8',platform]:
  if not f.is_file():raise SystemExit(f'Missing SDK component: {f}')
 web=root/'frontend'/'dist'
 if not (web/'index.html').is_file():raise SystemExit('Run npm ci --prefix frontend && npm run build --prefix frontend first')
+if not (web/'models'/'ggml-base-q5_1.bin').is_file():raise SystemExit('Missing pinned speech recognition model asset')
 build=root/'android'/'build';build.mkdir(parents=True,exist_ok=True)
 for name in ['classes','dex','generated']:
  directory=build/name
@@ -44,8 +45,19 @@ run(*compiler,'-encoding','UTF-8','-source','8','-target','8','-classpath',class
 run(tools/'d8','--lib',platform,'--min-api','26','--output',build/'dex',*visible_files(build/'classes','*.class'),*[library/'classes.jar' for library in libraries])
 with zipfile.ZipFile(build/'base.apk','a',compression=zipfile.ZIP_DEFLATED) as apk:
  for dex in (build/'dex').glob('*.dex'):apk.write(dex,dex.name)
+ # Foxlet loads its pinned Mozilla model catalog through ClassLoader.getResourceAsStream.
+ foxlet=next(library for library in libraries if library.name=='foxlet')
+ with zipfile.ZipFile(foxlet/'classes.jar') as classes:
+  for name in classes.namelist():
+   if name.startswith('io/github/yinvoker/foxlet/') and not name.endswith(('/', '.class')):
+    apk.writestr(name,classes.read(name))
+ native_libraries={}
  for library in libraries:
-  for native in (library/'jni'/args.abi).glob('*.so'):apk.write(native,'lib/'+args.abi+'/'+native.name)
+  for native in (library/'jni'/args.abi).glob('*.so'):native_libraries[native.name]=native
+ for name,native in sorted(native_libraries.items()):apk.write(native,'lib/'+args.abi+'/'+name)
+ whisper=build/'native'/args.abi/'libwhispercli.so'
+ if not whisper.is_file():raise SystemExit('Missing whisper.cpp native binary for '+args.abi)
+ apk.write(whisper,'lib/'+args.abi+'/'+whisper.name)
 run(tools/'zipalign','-f','4',build/'base.apk',build/'aligned.apk')
 out=pathlib.Path(args.out).resolve();out.parent.mkdir(parents=True,exist_ok=True)
 subprocess.run([str(tools/'apksigner'),'sign','--ks',str(key),'--ks-key-alias','quanneng','--ks-pass','env:QUANNENG_STORE_PASSWORD','--key-pass','env:QUANNENG_STORE_PASSWORD','--out',str(out),str(build/'aligned.apk')],check=True,env=env)

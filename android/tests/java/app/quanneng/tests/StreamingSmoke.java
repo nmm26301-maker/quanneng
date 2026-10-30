@@ -19,11 +19,28 @@ public final class StreamingSmoke extends Instrumentation {
         PrivateTestAccess.install(this);Bundle result=new Bundle();Activity player=null;
         try{
             sourceType=Class.forName("androidx.media3.datasource.DataSource");factoryType=Class.forName("androidx.media3.datasource.DataSource$Factory");specType=Class.forName("androidx.media3.datasource.DataSpec");
+            Method youtube=Class.forName("app.quanneng.YouTubeSubtitle").getDeclaredMethod("videoId",String.class);youtube.setAccessible(true);
+            check("AbCdEf123_-".equals(youtube.invoke(null,"https://www.youtube.com/watch?v=AbCdEf123_-")),"YouTube video URL rejected");
+            check("AbCdEf123_-".equals(youtube.invoke(null,"https://youtu.be/AbCdEf123_-")),"YouTube short URL rejected");
+            check(youtube.invoke(null,"https://www.youtube.com.evil.test/watch?v=AbCdEf123_-")==null,"Lookalike YouTube host accepted");
+            Method captionLanguage=Class.forName("app.quanneng.VideoCaptions").getDeclaredMethod("trackLanguage",String.class);captionLanguage.setAccessible(true);
+            check("ja".equals(captionLanguage.invoke(null,"subtitle.ja.vtt")),"Foreign caption language lost");
+            check("zh".equals(captionLanguage.invoke(null,"subtitle.zh-Hans.vtt")),"Translated caption language lost");
+            check(captionLanguage.invoke(null,"subtitle.unknown.vtt")==null,"Unknown caption language accepted");
+            Method captionPage=Class.forName("app.quanneng.VideoCaptions").getDeclaredMethod("sourcePage",String.class,String.class);captionPage.setAccessible(true);
+            check("https://x.com/a/status/123".equals(captionPage.invoke(null,"https://x.com/a/status/123","https://cdn.example/video.mp4")),"Other platform source page lost");
+            check(captionPage.invoke(null,"http://example.com/post",null)==null,"Insecure caption source accepted");
+            Method post=Class.forName("app.quanneng.PostVideoResolver").getDeclaredMethod("parse",String.class);post.setAccessible(true);
+            check("https://video.twimg.com/clip.mp4?tag=1".equals(post.invoke(null,"https://video.twimg.com/clip.mp4?tag=1\n")),"Single post video URL rejected");
+            boolean ambiguous=false;try{post.invoke(null,"https://video.twimg.com/one.mp4\nhttps://video.twimg.com/two.mp4");}catch(InvocationTargetException expected){ambiguous=true;}check(ambiguous,"Multiple unrelated post streams were silently selected");
             try(InputStream input=getContext().getAssets().open("buffer-fixture.mp4");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=input.read(b))!=-1)out.write(b,0,n);fixture=out.toByteArray();}
             policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),true);
-            cacheChecks();
+            cacheChecks();verifySpeech();
             player=open();Activity active=player;verifySubtitle(active);
-            AtomicReference<Throwable> uiError=new AtomicReference<>();runOnMainSync(()->{try{active.findViewById(1801).performClick();}catch(Throwable e){uiError.set(e);}});check(uiError.get()==null,"Optimization settings failed");sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK);
+            AtomicReference<Throwable> uiError=new AtomicReference<>();runOnMainSync(()->{try{active.findViewById(1801).performClick();}catch(Throwable e){uiError.set(e);}});check(uiError.get()==null,"Optimization settings failed");
+            boolean dismissed=false;long dialogDeadline=SystemClock.elapsedRealtime()+5000;
+            while(!dismissed&&SystemClock.elapsedRealtime()<dialogDeadline){android.view.accessibility.AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();if(root!=null)for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText("完成"))if("完成".contentEquals(node.getText())&&node.isClickable()){dismissed=node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);break;}if(!dismissed)SystemClock.sleep(100);}
+            check(dismissed&&!active.isFinishing(),"Optimization dialog did not close while retaining the player");
             NativeNetwork network=new NativeNetwork();network.throttled=true;network.interrupt=true;
             Uri uri=Uri.parse("https://stream-fixture.invalid/weak-"+System.nanoTime()+".mp4");Object cached=cached(uri,Collections.emptyMap(),network.factory());
             play(active,cached,uri);awaitPlaying(active,5000,45000);check(network.opens.get()>=2&&network.interrupted.get(),"Interrupted request was not retried");
@@ -48,6 +65,34 @@ public final class StreamingSmoke extends Instrumentation {
         long limit=SystemClock.elapsedRealtime()+15000;AtomicBoolean visible=new AtomicBoolean();while(SystemClock.elapsedRealtime()<limit){runOnMainSync(()->{try{android.widget.TextView cue=(android.widget.TextView)PrivateTestAccess.field(active.findViewById(1000),"subtitle");visible.set(cue.getText().toString().contains("StreamingSubtitleVerified"));}catch(Exception ignored){}});if(visible.get()){text.delete();report("External VTT parsed into current Media3 cues and displayed by actual subtitle view");return;}SystemClock.sleep(100);}throw new AssertionError("External subtitle did not render");
     }
     private static void check(boolean b,String message){if(!b)throw new AssertionError(message);}
+    private void verifySpeech()throws Exception{
+        Class<?> runtime=Class.forName("app.quanneng.TransferRuntime$Token"),progress=Class.forName("app.quanneng.TransferRuntime$Progress");
+        Constructor<?> ctor=runtime.getDeclaredConstructor();ctor.setAccessible(true);Object token=ctor.newInstance();
+        Object listener=Proxy.newProxyInstance(progress.getClassLoader(),new Class<?>[]{progress},(proxy,method,args)->null);
+        Uri fixture=Uri.parse("content://app.quanneng.next.tests.fixture/jfk.wav");
+        File transcript=(File)call(Class.forName("app.quanneng.SpeechSubtitle"),"transcribe",new Class<?>[]{Context.class,Uri.class,Map.class,int.class,runtime,progress},context(),fixture,Collections.emptyMap(),11000,token,listener);
+        String captions=new String(java.nio.file.Files.readAllBytes(transcript.toPath()),"UTF-8");
+        check(captions.startsWith("WEBVTT")&&captions.contains(" --> "),"Real speech did not yield synchronized VTT");
+        check(captions.toLowerCase(Locale.ROOT).contains("country"),"Whisper did not recognize speech from video audio");
+        Class<?> offline=Class.forName("app.quanneng.OfflineCaptionTranslator");
+        Object[] pivot=(Object[])call(offline,"route",new Class<?>[]{String.class,String.class},"ja","zh");
+        check(pivot.length==2&&"ja".equals(call(pivot[0],"getSource",new Class<?>[]{}))&&"en".equals(call(pivot[0],"getTarget",new Class<?>[]{}))&&"zh-Hans".equals(call(pivot[1],"getTarget",new Class<?>[]{})),"Foreign site captions did not select two-model translation");
+        Object[] english=(Object[])call(offline,"route",new Class<?>[]{String.class,String.class},"ja","en");
+        check(english.length==1&&"ja".equals(call(english[0],"getSource",new Class<?>[]{})),"Foreign site captions cannot translate into English");
+        File translated;
+        try{translated=(File)call(offline,"translate",new Class<?>[]{Context.class,File.class,String.class,String.class,runtime,progress},context(),transcript,"en","zh",token,listener);}
+        catch(InvocationTargetException error){
+            // Foxlet publishes arm64-v8a only. The x86 emulator still prepares and checks
+            // the Mozilla model; native inference is exercised on arm64 devices.
+            if(!new File(context().getApplicationInfo().nativeLibraryDir,"libfoxlet.so").isFile()&&error.getCause()!=null&&error.getCause().toString().contains("Native translation library could not be loaded")){
+                report("English audio transcription and verified translation model preparation; native inference requires arm64");return;
+            }
+            throw error;
+        }
+        String chinese=new String(java.nio.file.Files.readAllBytes(translated.toPath()),"UTF-8");
+        check(chinese.startsWith("WEBVTT")&&chinese.contains(" --> ")&&chinese.matches("(?s).*[\\u4e00-\\u9fff].*"),"Actual speech captions were not translated to timed Chinese subtitles");
+        transcript.delete();report("Bundled multilingual Whisper model decoded public speech audio to timed captions on-device");
+    }
     private void report(String message){Bundle b=new Bundle();b.putString("stream",message+"\n");sendStatus(0,b);}
     private static Object call(Object target,String name,Class<?>[] types,Object... args)throws Exception{
         Class<?> type=target instanceof Class?(Class<?>)target:target.getClass();Method m=null;
@@ -64,7 +109,11 @@ public final class StreamingSmoke extends Instrumentation {
         policy("clearCache",new Class<?>[]{Context.class},context());NativeNetwork network=new NativeNetwork();Object upstream=network.factory();Uri uri=Uri.parse("https://stream-fixture.invalid/range-"+System.nanoTime()+".mp4");Object cached=cached(uri,Collections.emptyMap(),upstream);
         check(Arrays.equals(read(cached,uri,0,fixture.length),fixture),"Initial cache content differs");int initial=network.opens.get();network.offline=true;
         Object reopened=cached(uri,Collections.emptyMap(),upstream);check(Arrays.equals(read(reopened,uri,100,4000),Arrays.copyOfRange(fixture,100,4100)),"Offline Range differs");check(network.opens.get()==initial,"Offline cache read reached network");
-        check(cached(uri,Collections.singletonMap("Cookie","private=yes"),upstream)==upstream,"Cookie source persisted");check(cached(uri,Collections.singletonMap("authorization","Basic private"),upstream)==upstream,"Authorization source persisted");check(cached(Uri.parse("content://app.quanneng.next.media/vault-open/a"),Collections.emptyMap(),upstream)==upstream,"Vault source persisted");
+        Map<String,String> cookie=Collections.singletonMap("Cookie","session=one");network.offline=false;
+        Object signed=cached(uri,cookie,upstream);check(signed!=upstream,"Cookie video was not eligible for app-private cache");check(Arrays.equals(read(signed,uri,0,fixture.length),fixture),"Cookie stream bytes differ");int signedOpens=network.opens.get();network.offline=true;
+        check(Arrays.equals(read(cached(uri,cookie,upstream),uri,64,2048),Arrays.copyOfRange(fixture,64,2112)),"Cookie cache offline Range differs");check(network.opens.get()==signedOpens,"Cookie cache hit contacted upstream");
+        boolean crossCookieBlocked=false;try{read(cached(uri,Collections.singletonMap("Cookie","session=two"),upstream),uri,0,256);}catch(InvocationTargetException expected){crossCookieBlocked=true;}check(crossCookieBlocked,"Different Cookie reused cached bytes");
+        check(cached(uri,Collections.singletonMap("authorization","Basic private"),upstream)==upstream,"Authorization source persisted");check(cached(Uri.parse("content://app.quanneng.next.media/vault-open/a"),Collections.emptyMap(),upstream)==upstream,"Vault source persisted");
         check(cached(Uri.parse("http://192.168.1.2/a.mp4"),Collections.emptyMap(),upstream)==upstream,"LAN source persisted");
         Object identity=cached(uri,Collections.singletonMap("Referer","https://other.invalid/"),upstream);boolean blocked=false;try{read(identity,uri,0,100);}catch(InvocationTargetException expected){blocked=true;}check(blocked,"Different source context reused cached bytes");
         policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),false);check(cached(uri,Collections.emptyMap(),upstream)==upstream,"Disabled cache still active");policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),true);
@@ -73,9 +122,33 @@ public final class StreamingSmoke extends Instrumentation {
     }
     private Activity open()throws Exception{
         ActivityMonitor monitor=addMonitor("app.quanneng.SystemPlayerActivity",null,false);
-        Intent intent=new Intent().setComponent(new ComponentName("app.quanneng.next","app.quanneng.MainActivity")).setAction(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://app.quanneng.next.tests.fixture/seek-fixture.mp4"),"video/mp4").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        runOnMainSync(()->context().startActivity(intent));Activity p=waitForMonitorWithTimeout(monitor,15000);removeMonitor(monitor);check(p!=null,"Player did not open");PrivateTestAccess.awaitUnlocked(this,p);awaitPlaying(p,300,20000);runOnMainSync(()->{check(p.findViewById(1810).getVisibility()==android.view.View.GONE,"Single video shows episode selector");check(p.findViewById(1824).getVisibility()==android.view.View.GONE,"Single video shows previous/next episode card");});return p;
+        Intent intent=new Intent().setComponent(new ComponentName("app.quanneng.next","app.quanneng.MainActivity")).setAction(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://app.quanneng.next.tests.fixture/seek-fixture.mp4"),"video/mp4").putExtra("sourcePage","https://www.youtube.com/watch?v=AbCdEf123_-").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        runOnMainSync(()->context().startActivity(intent));Activity p=waitForMonitorWithTimeout(monitor,15000);removeMonitor(monitor);check(p!=null,"Player did not open");PrivateTestAccess.awaitUnlocked(this,p);awaitPlaying(p,300,20000);runOnMainSync(()->{check(p.findViewById(1810).getVisibility()==android.view.View.GONE,"Single video shows episode selector");check(p.findViewById(1824).getVisibility()==android.view.View.GONE,"Single video shows previous/next episode card");
+            android.widget.Button zoom=p.findViewById(1320);check(zoom!=null&&zoom.isShown(),"Visible zoom control missing");zoom.performClick();check(zoom.getText().toString().contains("1.5"),"Zoom control did not change level");check(p.findViewById(1318)!=null&&p.findViewById(1318).isShown(),"Visible caption translation control missing");});verifyPinch(p);return p;
     }
+    private void verifyPinch(Activity p)throws Exception{
+        AtomicReference<Throwable> failure=new AtomicReference<>();runOnMainSync(()->{try{
+            android.view.View touch=p.findViewById(1010),video=p.findViewById(1000);check((Boolean)PrivateTestAccess.field(p,"ready"),"Player not ready for pinch");check(touch.getWidth()>0&&touch.getHeight()>0,"Gesture layer has no size");float cx=touch.getWidth()/2f,cy=touch.getHeight()/2f;long now=android.os.SystemClock.uptimeMillis();
+            dispatch(touch,now,android.view.MotionEvent.ACTION_DOWN,cx-30,cy);
+            dispatchPair(touch,now,android.view.MotionEvent.ACTION_POINTER_DOWN|1<<android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT,cx-30,cy,cx+30,cy);
+            dispatchPair(touch,now,android.view.MotionEvent.ACTION_MOVE,cx-100,cy,cx+100,cy);
+            dispatchPair(touch,now,android.view.MotionEvent.ACTION_MOVE,cx-130,cy,cx+130,cy);
+            dispatchPair(touch,now,android.view.MotionEvent.ACTION_POINTER_UP|1<<android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT,cx-130,cy,cx+130,cy);
+            dispatch(touch,now,android.view.MotionEvent.ACTION_UP,cx-130,cy);
+            float enlarged=(Float)call(video,"getZoom",new Class<?>[]{});check(enlarged>1.5f,"Two-finger pinch did not enlarge the video: "+enlarged);
+            dispatch(touch,now+200,android.view.MotionEvent.ACTION_DOWN,cx,cy);dispatch(touch,now+200,android.view.MotionEvent.ACTION_MOVE,cx+85,cy);dispatch(touch,now+200,android.view.MotionEvent.ACTION_UP,cx+85,cy);
+            android.view.SurfaceView surface=(android.view.SurfaceView)PrivateTestAccess.field(video,"surface");check(Math.abs(surface.getTranslationX())>1,"Enlarged picture did not pan under a finger");
+            dispatch(touch,now+400,android.view.MotionEvent.ACTION_DOWN,cx-130,cy);
+            dispatchPair(touch,now+400,android.view.MotionEvent.ACTION_POINTER_DOWN|1<<android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT,cx-130,cy,cx+130,cy);
+            dispatchPair(touch,now+400,android.view.MotionEvent.ACTION_MOVE,cx-30,cy,cx+30,cy);
+            dispatchPair(touch,now+400,android.view.MotionEvent.ACTION_POINTER_UP|1<<android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT,cx-30,cy,cx+30,cy);
+            dispatch(touch,now+400,android.view.MotionEvent.ACTION_UP,cx-30,cy);
+            check((Float)call(video,"getZoom",new Class<?>[]{})<enlarged,"Reverse pinch did not shrink the video");
+        }catch(Throwable error){failure.set(error);}});if(failure.get()!=null)throw new AssertionError("Pinch/pan gesture failed",failure.get());report("Two-finger focal zoom, one-finger picture pan and reverse pinch verified on decoded video");
+    }
+    private static int syntheticGestureStep;
+    private static void dispatch(android.view.View view,long down,int action,float x,float y){android.view.MotionEvent event=android.view.MotionEvent.obtain(down,down+50+40*syntheticGestureStep++,action,x,y,0);check(view.dispatchTouchEvent(event),"Gesture layer rejected single touch");event.recycle();}
+    private static void dispatchPair(android.view.View view,long down,int action,float x1,float y1,float x2,float y2){android.view.MotionEvent.PointerProperties[] ids={new android.view.MotionEvent.PointerProperties(),new android.view.MotionEvent.PointerProperties()};ids[0].id=0;ids[1].id=1;ids[0].toolType=ids[1].toolType=android.view.MotionEvent.TOOL_TYPE_FINGER;android.view.MotionEvent.PointerCoords[] pos={new android.view.MotionEvent.PointerCoords(),new android.view.MotionEvent.PointerCoords()};pos[0].x=x1;pos[0].y=y1;pos[1].x=x2;pos[1].y=y2;pos[0].pressure=pos[1].pressure=1;pos[0].size=pos[1].size=1;android.view.MotionEvent event=android.view.MotionEvent.obtain(down,down+50+40*syntheticGestureStep++,action,2,ids,pos,0,0,1,1,0,0,0,0);check(view.dispatchTouchEvent(event),"Gesture layer rejected two fingers");event.recycle();}
     private Object exo(Activity p)throws Exception{Object view=p.findViewById(1000),engine=PrivateTestAccess.field(view,"engine");return call(engine,"player",new Class<?>[]{});}
     private void play(Activity p,Object cached,Uri uri){runOnMainSync(()->{try{
         Class<?> factory=Class.forName("androidx.media3.exoplayer.source.ProgressiveMediaSource$Factory"),itemType=Class.forName("androidx.media3.common.MediaItem"),mediaType=Class.forName("androidx.media3.exoplayer.source.MediaSource"),retryType=Class.forName("androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy");
@@ -85,7 +158,7 @@ public final class StreamingSmoke extends Instrumentation {
     }catch(Exception e){throw new RuntimeException(e);}});}
     private void pause(Activity p){runOnMainSync(()->{try{call(exo(p),"pause",new Class<?>[]{});call(exo(p),"stop",new Class<?>[]{});}catch(Exception e){throw new RuntimeException(e);}});}
     private void awaitPlaying(Activity p,long position,long timeout)throws Exception{
-        long limit=SystemClock.elapsedRealtime()+timeout;AtomicBoolean good=new AtomicBoolean();while(SystemClock.elapsedRealtime()<limit){runOnMainSync(()->{try{Object v=p.findViewById(1000),engine=PrivateTestAccess.field(v,"engine");good.set((Integer)call(v,"getCurrentPosition",new Class<?>[]{})>position&&(Integer)call(engine,"getVideoWidth",new Class<?>[]{})>0&&(Boolean)call(v,"isPlaying",new Class<?>[]{}));}catch(Exception ignored){}});if(good.get())return;SystemClock.sleep(100);}throw new AssertionError("Video did not decode and advance beyond "+position);
+        long limit=SystemClock.elapsedRealtime()+timeout;AtomicBoolean good=new AtomicBoolean();AtomicReference<String> last=new AtomicReference<>("unknown");while(SystemClock.elapsedRealtime()<limit){runOnMainSync(()->{try{Object v=p.findViewById(1000),engine=PrivateTestAccess.field(v,"engine");int at=(Integer)call(v,"getCurrentPosition",new Class<?>[]{}),width=(Integer)call(engine,"getVideoWidth",new Class<?>[]{}),duration=(Integer)call(v,"getDuration",new Class<?>[]{});boolean playing=(Boolean)call(v,"isPlaying",new Class<?>[]{});last.set("position="+at+", duration="+duration+", width="+width+", playing="+playing);good.set(at>position&&width>0&&playing);}catch(Exception e){last.set(e.toString());}});if(good.get())return;SystemClock.sleep(100);}throw new AssertionError("Video did not decode and advance beyond "+position+" ("+last.get()+")");
     }
     private final class NativeNetwork {
         final AtomicInteger opens=new AtomicInteger(),bytes=new AtomicInteger();final AtomicBoolean interrupted=new AtomicBoolean();volatile boolean offline,throttled,interrupt;

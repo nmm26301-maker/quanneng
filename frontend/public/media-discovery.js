@@ -23,10 +23,16 @@
     seen.add(url.href);report({kind: 'source', url: url.href, mime, title: title(active), direct});
   }
   function scan() {
-    if (!active) return;
+    if (!active) {
+      const playing = [...document.querySelectorAll('video')].filter(v => !v.paused && !v.ended);
+      active = playing.find(v => !v.muted) || (playing.length === 1 ? playing[0] : null);
+      if (!active) return;
+      serial++; seen = new Set(); report({kind: 'activate', title: title(active)});
+    }
     const src = active.currentSrc || active.src || '';
     const mapped = objects.get(src);
     if (mapped) candidate(mapped.url, mapped.type, true);
+    else if (src.startsWith('blob:')) recent.forEach(value => candidate(value.url, value.type));
     else if (!src.startsWith('blob:')) candidate(src, active.querySelector?.('source')?.type || '', true);
     report({kind: 'status', playing: !active.paused, blob: src.startsWith('blob:'), encrypted: !!active.mediaKeys});
   }
@@ -37,6 +43,17 @@
   }
   const intent = event => { if (event.isTrusted) { gesture = Date.now();recent.length = 0; } };
   ['pointerdown', 'touchstart', 'keydown'].forEach(event => document.addEventListener(event, intent, true));
+  document.addEventListener('click', event => {
+    if (!event.isTrusted || !event.target?.closest) return;
+    const control = event.target.closest('video,button,[role="button"],[aria-label]');
+    if (!control) return;
+    const label = [control.getAttribute?.('aria-label'),control.getAttribute?.('title'),control.className,control.textContent].join(' ').slice(0, 160);
+    if (control.tagName !== 'VIDEO' && !/(?:play|video|播放|视频|▶)/i.test(label)) return;
+    const post = event.target.closest('article')?.querySelector?.('a[href*="/status/"]');
+    let page = location.href;
+    try { if (post) {const link = new URL(post.href,location.href);if (link.protocol === 'https:' && link.host === location.host) page = link.href;} } catch {}
+    report({kind: 'attempt', page});
+  }, true);
   document.addEventListener('play', event => {
     if (event.target?.tagName !== 'VIDEO' || Date.now() - gesture > 15000) return;
     active = event.target;serial++;seen = new Set();report({kind: 'activate', title: title(active)});
@@ -69,5 +86,5 @@
   const revoke = URL.revokeObjectURL;
   if (revoke) URL.revokeObjectURL = function(value) {objects.delete(value);return revoke.call(this, value);};
   report({kind: 'ready'});
-  try {window.QuannengMedia.onmessage = event => {if (event.data === 'gesture') {gesture = Date.now();recent.length = 0;}else if (event.data === 'scan') scan();else if (event.data === 'pause') document.querySelectorAll('video').forEach(video => video.pause());};} catch {}
+  try {window.QuannengMedia.onmessage = event => {if (event.data === 'gesture') {gesture = Date.now();recent.length = 0;}else if (event.data === 'scan') {seen.clear();scan();}else if (event.data === 'pause') document.querySelectorAll('video').forEach(video => video.pause());};} catch {}
 })();
