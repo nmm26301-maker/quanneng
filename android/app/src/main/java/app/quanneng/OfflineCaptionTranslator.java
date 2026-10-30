@@ -22,7 +22,7 @@ import kotlin.Unit;
 import kotlinx.coroutines.BuildersKt;
 import kotlinx.coroutines.CoroutineScope;
 
-/** English captions to the selected language with a locally installed, hash-verified Mozilla model. */
+/** Site or speech captions to the selected language using hash-verified Mozilla models. */
 final class OfflineCaptionTranslator {
     private OfflineCaptionTranslator() {}
     private interface Suspending<T> {Object invoke(Continuation<? super T> continuation);}
@@ -31,9 +31,14 @@ final class OfflineCaptionTranslator {
         return (T)BuildersKt.runBlocking(EmptyCoroutineContext.INSTANCE,
             (Function2<CoroutineScope,Continuation<? super T>,Object>)(scope, continuation)->operation.invoke(continuation));
     }
-    static File translate(Context context,File source,String language,TransferRuntime.Token token,TransferRuntime.Progress progress)throws Exception {
-        if(!java.util.Arrays.asList(VideoCaptions.LANGUAGES).contains(language)||"en".equals(language))throw new IOException("不支持的翻译目标语言");
-        String target="zh".equals(language)?"zh-Hans":language;
+    static LanguagePair[] route(String from,String to)throws IOException {
+        if(!java.util.Arrays.asList(VideoCaptions.LANGUAGES).contains(from)||!java.util.Arrays.asList(VideoCaptions.LANGUAGES).contains(to)||from.equals(to))throw new IOException("不支持的翻译语向");
+        String source="zh".equals(from)?"zh-Hans":from,target="zh".equals(to)?"zh-Hans":to;
+        if("en".equals(from)||"en".equals(to))return new LanguagePair[]{new LanguagePair(source,target)};
+        return new LanguagePair[]{new LanguagePair(source,"en"),new LanguagePair("en",target)};
+    }
+    static File translate(Context context,File source,String from,String language,TransferRuntime.Token token,TransferRuntime.Progress progress)throws Exception {
+        LanguagePair[] pairs=route(from,language);
         String raw;try(FileInputStream in=new FileInputStream(source)){raw=SubtitleStore.read(in);}
         List<String> stamps=new ArrayList<>(),lines=new ArrayList<>();
         for(String block:raw.split("\\n\\s*\\n")){
@@ -47,20 +52,23 @@ final class OfflineCaptionTranslator {
             if(lines.size()>3000)throw new IOException("字幕片段过多");
         }
         if(lines.isEmpty())throw new IOException("语音识别没有返回可翻译的内容");
-        token.check();progress.update(0,"正在准备 "+language+" 翻译语言包（首次需下载）");
+        token.check();progress.update(0,"正在准备翻译语言包（首次需下载）");
         Foxlet engine=await(c->Foxlet.Companion.create(context.getApplicationContext(),new FoxletConfig(),c));
         try {
-            LanguagePair pair=new LanguagePair("en",target);
             Function1<io.github.yinvoker.foxlet.DownloadProgress,Unit> onDownload=p->{
                 if(token.cancelled.get())throw new java.util.concurrent.CancellationException("任务已取消");
                 long total=p.getTotalBytes();int percent=total>0?(int)Math.min(100,p.getDownloadedBytes()*100/total):0;
-                progress.update(percent,"正在下载 "+language+" 语言包 · "+percent+"%");return Unit.INSTANCE;
+                progress.update(percent,"正在下载翻译语言包 · "+percent+"%");return Unit.INSTANCE;
             };
-            InstalledModel model=await(c->engine.getModels().prepare(pair,PreparePolicy.LocalOrBundled,null,onDownload,c));
+            InstalledModel first=await(c->engine.getModels().prepare(pairs[0],PreparePolicy.LocalOrBundled,null,onDownload,c));
+            token.check();
+            InstalledModel second=pairs.length==2?await(c->engine.getModels().prepare(pairs[1],PreparePolicy.LocalOrBundled,null,onDownload,c)):null;
             StringBuilder vtt=new StringBuilder("WEBVTT\n\n");
             for(int at=0;at<lines.size();at+=12){
                 token.check();int end=Math.min(at+12,lines.size());final int start=at;
-                List<String> batch=await(c->engine.getTranslator().translate(lines.subList(start,end),model,TextFormat.Plain,c));
+                List<String> batch=second==null
+                    ?await(c->engine.getTranslator().translate(lines.subList(start,end),first,TextFormat.Plain,c))
+                    :await(c->engine.getTranslator().translatePivot(lines.subList(start,end),first,second,TextFormat.Plain,c));
                 if(batch==null||batch.size()!=end-at)throw new IOException("翻译字幕数量不完整");
                 for(int i=at;i<end;i++){
                     String text=batch.get(i-at);

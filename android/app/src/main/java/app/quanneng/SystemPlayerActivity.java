@@ -188,20 +188,16 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private void fetchVideoCaptions(String page,String language){
         if(subtitleToken!=null||!privateReady())return;
         TransferRuntime.Token token=new TransferRuntime.Token();subtitleToken=token;long epoch=mediaEpoch;final Uri source=current;final int duration=video.getDuration();final Map<String,String> requestHeaders=new HashMap<>(playbackHeaders);
-        translationState("正在识别语音 · 点按取消",true);
-        vaultIo.execute(()->{File translated=null;String message="";try{
+        translationState(page==null?"正在识别语音 · 点按取消":"正在查找网页字幕 · 点按取消",true);
+        vaultIo.execute(()->{File translated=null,original=null;String message="";try{
                 VideoCaptions.Track track=null;if(page!=null)try{track=VideoCaptions.fetch(this,page,language,token);}catch(Exception error){token.check();}
                 if(track==null)track=new VideoCaptions.Track(SpeechSubtitle.transcribe(this,source,requestHeaders,duration,token,(percent,phase)->runOnUiThread(()->{if(subtitleToken==token&&epoch==mediaEpoch)translationState(phase+" · 点按取消",true);})),"en");
+                original=track.file;
                 if(track.language.equals(language))translated=track.file;
-                else if(Build.VERSION.SDK_INT>=28){
-                    if(!"en".equals(track.language)){
-                        File english=SpeechSubtitle.transcribe(this,source,requestHeaders,duration,token,(percent,phase)->runOnUiThread(()->{if(subtitleToken==token&&epoch==mediaEpoch)translationState(phase+" · 点按取消",true);}));
-                        track.file.delete();track=new VideoCaptions.Track(english,"en");
-                    }
-                    translated=OfflineCaptionTranslator.translate(this,track.file,language,token,(percent,phase)->runOnUiThread(()->{if(subtitleToken==token&&epoch==mediaEpoch)translationState(phase+" · 点按取消",true);}));
-                }else translated=CaptionTranslator.translate(this,track.file,track.language,language,token);
-                if(translated!=track.file)track.file.delete();
+                else if(Build.VERSION.SDK_INT>=28)translated=OfflineCaptionTranslator.translate(this,track.file,track.language,language,token,(percent,phase)->runOnUiThread(()->{if(subtitleToken==token&&epoch==mediaEpoch)translationState(phase+" · 点按取消",true);}));
+                else translated=CaptionTranslator.translate(this,track.file,track.language,language,token);
             }catch(Exception error){message=error.getMessage()==null?"语音翻译失败，请稍后重试":error.getMessage();}
+            finally{if(original!=null&&original!=translated)original.delete();}
             final File result=translated;final String failure=message;runOnUiThread(()->{if(isFinishing()||isDestroyed()||subtitleToken!=token)return;subtitleToken=null;
                 if(result==null){translationState("视频语音翻译 · 重试",true);whenUnlocked(()->toast(failure));return;}
                 translationState("字幕已加载 · 换语言",true);whenUnlocked(()->{if(epoch!=mediaEpoch)return;activeSubtitle=result.getName();subtitleStamp="";PlaybackHistory.subtitle(this,current.toString(),activeSubtitle);applyRememberedSubtitle();toast("翻译字幕已加载");});

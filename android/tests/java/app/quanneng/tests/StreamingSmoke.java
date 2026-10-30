@@ -74,8 +74,13 @@ public final class StreamingSmoke extends Instrumentation {
         String captions=new String(java.nio.file.Files.readAllBytes(transcript.toPath()),"UTF-8");
         check(captions.startsWith("WEBVTT")&&captions.contains(" --> "),"Real speech did not yield synchronized VTT");
         check(captions.toLowerCase(Locale.ROOT).contains("country"),"Whisper did not recognize speech from video audio");
+        Class<?> offline=Class.forName("app.quanneng.OfflineCaptionTranslator");
+        Object[] pivot=(Object[])call(offline,"route",new Class<?>[]{String.class,String.class},"ja","zh");
+        check(pivot.length==2&&"ja".equals(call(pivot[0],"getSource",new Class<?>[]{}))&&"en".equals(call(pivot[0],"getTarget",new Class<?>[]{}))&&"zh-Hans".equals(call(pivot[1],"getTarget",new Class<?>[]{})),"Foreign site captions did not select two-model translation");
+        Object[] english=(Object[])call(offline,"route",new Class<?>[]{String.class,String.class},"ja","en");
+        check(english.length==1&&"ja".equals(call(english[0],"getSource",new Class<?>[]{})),"Foreign site captions cannot translate into English");
         File translated;
-        try{translated=(File)call(Class.forName("app.quanneng.OfflineCaptionTranslator"),"translate",new Class<?>[]{Context.class,File.class,String.class,runtime,progress},context(),transcript,"zh",token,listener);}
+        try{translated=(File)call(offline,"translate",new Class<?>[]{Context.class,File.class,String.class,String.class,runtime,progress},context(),transcript,"en","zh",token,listener);}
         catch(InvocationTargetException error){
             // Foxlet publishes arm64-v8a only. The x86 emulator still prepares and checks
             // the Mozilla model; native inference is exercised on arm64 devices.
