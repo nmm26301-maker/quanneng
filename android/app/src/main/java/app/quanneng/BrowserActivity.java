@@ -152,7 +152,7 @@ public final class BrowserActivity extends PrivateActivity {
             headers.putAll(captured);String page=frame!=null?frame:old!=null?old.optString("page",web.getUrl()):web.getUrl();
             if(!headers.containsKey("Referer")){String ref=PlaybackHeaders.referrer(page,url);if(!ref.isEmpty())headers.put("Referer",ref);}
             headers.put("User-Agent",web.getSettings().getUserAgentString());String cookie=CookieManager.getInstance().getCookie(url);if(cookie!=null)headers.put("Cookie",cookie);
-            try{JSONObject c=new JSONObject();c.put("url",url);c.put("page",web.getUrl());c.put("frame",page);c.put("title",activeTitle.isEmpty()?cleanTitle("",page):activeTitle);String mime=MediaCandidatePolicy.mime(url,observedMime);if(mime.isEmpty()&&old!=null)mime=old.optString("mime","");c.put("mime",mime);c.put("headers",new JSONObject(PlaybackHeaders.sanitize(headers)));contexts.put(url,c);}catch(JSONException ignored){}
+            try{JSONObject c=new JSONObject();c.put("url",url);c.put("page",web.getUrl());c.put("frame",page);c.put("title",activeTitle.isEmpty()?cleanTitle("",page):activeTitle);String mime=MediaCandidatePolicy.mime(url,observedMime);if(mime.isEmpty()&&old!=null)mime=old.optString("mime","");c.put("mime",mime);c.put("direct",direct);c.put("headers",new JSONObject(PlaybackHeaders.sanitize(headers)));contexts.put(url,c);}catch(JSONException ignored){}
             updateCount();
         });
     }
@@ -184,18 +184,26 @@ public final class BrowserActivity extends PrivateActivity {
         for(String url:candidates)collect(url,requests.get(url),frame,"",false);
     }
     private void scan(boolean show){
-        if(media.isEmpty())collectNativeRequests();
         for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("scan");}catch(RuntimeException ignored){}
-        if(show)awaitScanResult(0);
+        if(show)awaitScanResult(0);else if(media.isEmpty())collectNativeRequests();
     }
     private void awaitScanResult(int attempt){
         if(handingOff)return;
         if(!media.isEmpty()){handoff(best());return;}
-        if(attempt<8){handler.postDelayed(()->{if(media.isEmpty())collectNativeRequests();for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("scan");}catch(RuntimeException ignored){}awaitScanResult(attempt+1);},200);return;}
+        if(attempt<8){handler.postDelayed(()->{
+            for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("scan");}catch(RuntimeException ignored){}
+            // Give the document-start observer a few turns to report the selected blob first.
+            if(attempt>=3&&media.isEmpty())collectNativeRequests();
+            awaitScanResult(attempt+1);
+        },200);return;}
         toast(encrypted?"受保护媒体请在原网页观看":"请先在网页中点播放；只识别你当前点播的视频");
     }
     private String best(){
-        return Collections.min(media,Comparator.comparingInt(u->MediaCandidatePolicy.priority(u,contexts.containsKey(u)?contexts.get(u).optString("mime",""):"")));
+        return Collections.min(media,Comparator.comparingInt(u->{
+            JSONObject context=contexts.get(u);
+            if(context!=null&&context.optBoolean("direct",false))return -1;
+            return MediaCandidatePolicy.priority(u,context==null?"":context.optString("mime",""));
+        }));
     }
     private void handoff(String value){
         if(handingOff||encrypted||!privateReady()||isFinishing())return;
