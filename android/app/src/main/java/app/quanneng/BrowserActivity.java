@@ -38,6 +38,9 @@ public final class BrowserActivity extends PrivateActivity {
     private final Map<String,Map<String,String>> requests=Collections.synchronizedMap(new LinkedHashMap<String,Map<String,String>>(){
         @Override protected boolean removeEldestEntry(Map.Entry<String,Map<String,String>> entry){return size()>256;}
     });
+    private final Map<String,Long> requestTimes=Collections.synchronizedMap(new LinkedHashMap<String,Long>(){
+        @Override protected boolean removeEldestEntry(Map.Entry<String,Long> entry){return size()>256;}
+    });
     private boolean advanced,playing,blob,encrypted;
     private String activeFrame="",activeSession="",activeTitle="";
     private boolean handingOff;
@@ -79,7 +82,7 @@ public final class BrowserActivity extends PrivateActivity {
             @Override public void onPageStarted(WebView view,String url,android.graphics.Bitmap icon){resetDiscovery();address.setText(url);long epoch=++pageEpoch;pageProgress.setVisibility(View.VISIBLE);web.getSettings().setBlockNetworkImage(fastLoading);
                 handler.postDelayed(()->releaseImages(epoch),2500);}
             @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request){
-                String u=request.getUrl().toString();if(MainActivity.isHttps(u))requests.put(u,PlaybackHeaders.sanitize(request.getRequestHeaders()));
+                String u=request.getUrl().toString();if(MainActivity.isHttps(u)){requests.put(u,PlaybackHeaders.sanitize(request.getRequestHeaders()));requestTimes.put(u,SystemClock.elapsedRealtime());}
                 return null;
             }
             @Override public void onPageCommitVisible(WebView view,String url){long epoch=pageEpoch;handler.postDelayed(()->releaseImages(epoch),350);}
@@ -134,9 +137,9 @@ public final class BrowserActivity extends PrivateActivity {
         if(!MainActivity.isHttps(frame))return false;Uri uri=Uri.parse(frame);
         return Objects.equals(uri.getHost(),origin.getHost())&&(uri.getPort()==-1?443:uri.getPort())==(origin.getPort()==-1?443:origin.getPort());
     }
-    private void resetDiscovery(){generation.incrementAndGet();media.clear();contexts.clear();frames.clear();requests.clear();playing=false;blob=false;encrypted=false;activeFrame="";activeSession="";activeTitle="";handingOff=false;webGestureAt=-60000;updateCount();}
+    private void resetDiscovery(){generation.incrementAndGet();media.clear();contexts.clear();frames.clear();requests.clear();requestTimes.clear();playing=false;blob=false;encrypted=false;activeFrame="";activeSession="";activeTitle="";handingOff=false;webGestureAt=-60000;updateCount();}
     private void collect(String url,Map<String,String> requestHeaders,String frame,String observedMime,boolean direct){
-        if(!MainActivity.isHttps(url)||url.length()>8192||activeFrame.isEmpty()||!Objects.equals(activeFrame,frame))return;
+        if(!MainActivity.isHttps(url)||url.length()>8192||(!activeFrame.isEmpty()&&!Objects.equals(activeFrame,frame)))return;
         if(!MediaCandidatePolicy.exportable(url,direct))return;
         final int seenOn=generation.get();
         HashMap<String,String> captured=PlaybackHeaders.sanitize(requestHeaders==null?requests.get(url):requestHeaders);
@@ -149,7 +152,7 @@ public final class BrowserActivity extends PrivateActivity {
             headers.putAll(captured);String page=frame!=null?frame:old!=null?old.optString("page",web.getUrl()):web.getUrl();
             if(!headers.containsKey("Referer")){String ref=PlaybackHeaders.referrer(page,url);if(!ref.isEmpty())headers.put("Referer",ref);}
             headers.put("User-Agent",web.getSettings().getUserAgentString());String cookie=CookieManager.getInstance().getCookie(url);if(cookie!=null)headers.put("Cookie",cookie);
-            try{JSONObject c=new JSONObject();c.put("url",url);c.put("page",web.getUrl());c.put("frame",page);c.put("title",activeTitle);String mime=MediaCandidatePolicy.mime(url,observedMime);if(mime.isEmpty()&&old!=null)mime=old.optString("mime","");c.put("mime",mime);c.put("headers",new JSONObject(PlaybackHeaders.sanitize(headers)));contexts.put(url,c);}catch(JSONException ignored){}
+            try{JSONObject c=new JSONObject();c.put("url",url);c.put("page",web.getUrl());c.put("frame",page);c.put("title",activeTitle.isEmpty()?cleanTitle("",page):activeTitle);String mime=MediaCandidatePolicy.mime(url,observedMime);if(mime.isEmpty()&&old!=null)mime=old.optString("mime","");c.put("mime",mime);c.put("headers",new JSONObject(PlaybackHeaders.sanitize(headers)));contexts.put(url,c);}catch(JSONException ignored){}
             updateCount();
         });
     }
@@ -171,9 +174,25 @@ public final class BrowserActivity extends PrivateActivity {
         mediaButton.setText(handingOff?"正在打开播放器…":media.isEmpty()?"先在网页播放，再点此转到全能":"转到全能播放 · "+activeTitle);
         if(note!=null)note.setText(!advanced?"请先更新 Android 系统 WebView，才能识别你点播的视频。":encrypted?"此视频使用受保护媒体，请继续在原网页观看。":media.isEmpty()?(playing?"正在识别当前点播视频…暂未取得可独立播放的地址。":"网页开始播放后识别当前视频，点“转到全能播放”才打开播放器。"):"已备注："+activeTitle+" · "+Uri.parse(web.getUrl()).getHost()+"\n手动点按钮转接；退出播放器回到此网页。");
     }
+    private void collectNativeRequests(){
+        long now=SystemClock.elapsedRealtime(),cutoff=webGestureAt>0?webGestureAt-5000:Long.MAX_VALUE;
+        String frame=activeFrame.isEmpty()?(web==null?"":web.getUrl()):activeFrame;
+        ArrayList<String> candidates=new ArrayList<>();
+        synchronized(requestTimes){for(Map.Entry<String,Long> entry:requestTimes.entrySet()){
+            if(entry.getValue()>=cutoff&&entry.getValue()<=now&&MediaCandidatePolicy.playable(entry.getKey()))candidates.add(entry.getKey());
+        }}
+        for(String url:candidates)collect(url,requests.get(url),frame,"",false);
+    }
     private void scan(boolean show){
+        if(media.isEmpty())collectNativeRequests();
         for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("scan");}catch(RuntimeException ignored){}
-        if(show){if(!media.isEmpty())handoff(best());else toast(encrypted?"受保护媒体请在原网页观看":"请先在网页中点播放；只识别你当前点播的视频");}
+        if(show)awaitScanResult(0);
+    }
+    private void awaitScanResult(int attempt){
+        if(handingOff)return;
+        if(!media.isEmpty()){handoff(best());return;}
+        if(attempt<8){handler.postDelayed(()->{if(media.isEmpty())collectNativeRequests();for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("scan");}catch(RuntimeException ignored){}awaitScanResult(attempt+1);},200);return;}
+        toast(encrypted?"受保护媒体请在原网页观看":"请先在网页中点播放；只识别你当前点播的视频");
     }
     private String best(){
         return Collections.min(media,Comparator.comparingInt(u->MediaCandidatePolicy.priority(u,contexts.containsKey(u)?contexts.get(u).optString("mime",""):"")));
@@ -214,5 +233,5 @@ public final class BrowserActivity extends PrivateActivity {
     @Override protected void onResume(){super.onResume();if(web!=null&&privateReady())web.onResume();}
     @Override protected void onPrivateUnlocked(){if(web!=null)web.onResume();}
     @Override protected void onPrivateLocked(){if(web!=null){web.onPause();web.evaluateJavascript("document.querySelectorAll('video').forEach(v=>v.pause())",null);for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("pause");}catch(RuntimeException ignored){}}}
-    @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);hideCustomView();frames.clear();requests.clear();contexts.clear();if(web!=null)web.destroy();super.onDestroy();}
+    @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);hideCustomView();frames.clear();requests.clear();requestTimes.clear();contexts.clear();if(web!=null)web.destroy();super.onDestroy();}
 }
