@@ -5,7 +5,7 @@
 ## 当前已确认
 
 - 正式应用 ID：`app.quanneng.next`；固定发布证书 SHA-256：`bf6f9d9599d42993eb0160efd5d71a070f75d0d5ffc0c0a87bf8bb04d8c8e182`。
-- 仓库有加密签名归档：[`signing/QuannengNext-release-signing-backup.encrypted.json`](../signing/QuannengNext-release-signing-backup.encrypted.json)，当前文件约 6 KB；README 声明使用 AES-256-GCM + scrypt。
+- 仓库有加密签名归档：[`signing/QuannengNext-release-signing-backup.encrypted.json`](../signing/QuannengNext-release-signing-backup.encrypted.json)，当前文件约 6 KB；README 声明使用 AES-256-GCM + scrypt。已将密文逐字节镜像到 [Zizai 私人备份](https://github.com/nmm26301-maker/Zizai/blob/main/backups/security-audit-2026-11-01/Quanneng/QuannengNext-release-signing-backup.encrypted.json)。
 - 仓库包含恢复脚本：[`android/tools/restore-signing.py`](../android/tools/restore-signing.py)；恢复和构建说明：[安装与签名恢复](INSTALLATION.md)。
 - 文档记录解密输出 ZIP 的 SHA-256 为 `03195ef3dc609cb75dc0682e3f88ba8ef173fe9dda7aa0e1645fee2f730950bf`，签名证书指纹为上方固定指纹。
 - 仓库忽略 `*.p12`、`*.keystore`、`*signing-backup.zip` 和 `*recovery-password*.json`，避免将明文签名材料和恢复口令误提交。
