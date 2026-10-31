@@ -1,6 +1,6 @@
-# 全能新版 v0.4.0
+# 全能新版 v0.4.3
 
-安卓视频播放器与网址收藏。新增底部「功能中心」，12 项增强的用法与边界见 [功能说明](docs/FEATURES.md)，v0.4.1 的缓存、弱网优化与同剧选集见 [流畅播放](docs/STREAMING.md)。React 19 + Tailwind CSS 4 离线界面，使用 GSYVideoPlayer 14.0.0 + Media3 1.10.1 播放内核。
+安卓视频播放器与网址收藏。main 分支当前正式版记录为 v0.4.3（versionCode 15）；最新 v0.4.9 多语言字幕与双指缩放改动仍在 [开放 PR #1](https://github.com/nmm26301-maker/quanneng/pull/1)，尚未合并为正式版。签名备份验收状态见 [安全备份与迁移清单](docs/SECURITY-BACKUP.md)。新增底部「功能中心」，用法与边界见 [功能说明](docs/FEATURES.md)；缓存、弱网优化与同剧选集见 [流畅播放](docs/STREAMING.md)。React 19 + Tailwind CSS 4 离线界面，使用 GSYVideoPlayer 14.0.0 + Media3 1.10.1 播放内核。
 
 - 本地视频、HTTPS 视频直链、开放 HLS / DASH、网页媒体发现。
 - 新增六个平台的视频入口：百度网盘、哔哩哔哩、抖音、快手、腾讯视频、爱奇艺；可以从其他应用分享普通视频，或使用 Android 系统文件选择器导入并另存到用户指定位置。
