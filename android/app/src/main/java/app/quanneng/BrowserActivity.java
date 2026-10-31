@@ -175,7 +175,7 @@ public final class BrowserActivity extends PrivateActivity {
         if(note!=null)note.setText(!advanced?"请先更新 Android 系统 WebView，才能识别你点播的视频。":encrypted?"此视频使用受保护媒体，请继续在原网页观看。":media.isEmpty()?(playing?"正在识别当前点播视频…暂未取得可独立播放的地址。":"网页开始播放后识别当前视频，点“转到全能播放”才打开播放器。"):"已备注："+activeTitle+" · "+Uri.parse(web.getUrl()).getHost()+"\n手动点按钮转接；退出播放器回到此网页。");
     }
     private void collectNativeRequests(){
-        long now=SystemClock.elapsedRealtime(),cutoff=webGestureAt>0?webGestureAt-5000:Long.MAX_VALUE;
+        long now=SystemClock.elapsedRealtime(),cutoff=webGestureAt>0?webGestureAt-(activeFrame.isEmpty()?5000:0):Long.MAX_VALUE;
         String frame=activeFrame.isEmpty()?(web==null?"":web.getUrl()):activeFrame;
         ArrayList<String> candidates=new ArrayList<>();
         synchronized(requestTimes){for(Map.Entry<String,Long> entry:requestTimes.entrySet()){
@@ -193,7 +193,7 @@ public final class BrowserActivity extends PrivateActivity {
         if(attempt<8){handler.postDelayed(()->{
             for(JavaScriptReplyProxy reply:new ArrayList<>(frames.values()))try{reply.postMessage("scan");}catch(RuntimeException ignored){}
             // Give the document-start observer a few turns to report the selected blob first.
-            if(attempt>=3&&media.isEmpty())collectNativeRequests();
+            if(attempt>=6&&media.isEmpty())collectNativeRequests();
             awaitScanResult(attempt+1);
         },200);return;}
         toast(encrypted?"受保护媒体请在原网页观看":"请先在网页中点播放；只识别你当前点播的视频");
