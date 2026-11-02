@@ -5,7 +5,7 @@
   const mediaPath = /\.(?:m3u8|mpd|mp4|webm|m4v|mov|mkv)(?:[?#]|$)|\/videoplayback(?:[/?]|$)|[?&]mime=video/i;
   const fragment = /\.(?:ts|m4s|cmfv|cmfa)(?:[?#]|$)|(?:^|[\/_ .-])(?:init|dashinit|seg(?:ment)?|chunk|frag(?:ment)?)[_.\d-]/i;
   const blobs = new WeakMap(), objects = new Map(), recent = [];
-  let gesture = 0, active = null, serial = 0, seen = new Set();
+  let gesture = 0, active = null, activeSource = '', serial = 0, seen = new Set();
   const report = data => { try { window.QuannengMedia?.postMessage(JSON.stringify({...data, frame: location.href, session: String(serial)})); } catch {} };
   function title(video) {
     const episode = document.querySelector('[aria-current="true"], [aria-current="page"], .episode.active, .playlist .active');
@@ -60,10 +60,19 @@
     if (seen.has(url.href)) return;
     seen.add(url.href);report({kind: 'source', url: url.href, mime, title: title(active), direct});
   }
+  function activate(video) {
+    if (!video) return;
+    active = video;
+    activeSource = video.currentSrc || video.src || '';
+    serial++;
+    seen = new Set();
+    report({kind: 'activate', title: title(active)});
+  }
   function scan() {
-    if (!active && Date.now() - gesture <= 30000) {
+    if (Date.now() - gesture <= 30000) {
       const playing = [...document.querySelectorAll('video')].find(video => !video.paused && (video.currentSrc || video.src));
-      if (playing) { active = playing; serial++; seen = new Set(); report({kind: 'activate', title: title(active)}); }
+      const source = playing?.currentSrc || playing?.src || '';
+      if (playing && (!active || playing !== active || source !== activeSource)) activate(playing);
     }
     if (!active) return;
     const src = active.currentSrc || active.src || '';
@@ -81,12 +90,19 @@
   ['pointerdown', 'touchstart', 'keydown'].forEach(event => document.addEventListener(event, intent, true));
   document.addEventListener('play', event => {
     if (event.target?.tagName !== 'VIDEO' || Date.now() - gesture > 30000) return;
-    active = event.target;serial++;seen = new Set();report({kind: 'activate', title: title(active)});
+    activate(event.target);
     scan();
     const src = active.currentSrc || active.src || '';
     if (src.startsWith('blob:') && !objects.has(src)) recent.forEach(value => candidate(value.url, value.type));
   }, true);
-  ['loadedmetadata', 'playing', 'encrypted'].forEach(event => document.addEventListener(event, e => { if (e.target === active) {if (event === 'encrypted') report({kind: 'status', encrypted: true});scan();} }, true));
+  ['loadedmetadata', 'playing', 'encrypted'].forEach(event => document.addEventListener(event, e => {
+    if (e.target === active) {
+      const source = active.currentSrc || active.src || '';
+      if (event === 'playing' && source !== activeSource) activate(active);
+      if (event === 'encrypted') report({kind: 'status', encrypted: true});
+      scan();
+    }
+  }, true));
   if (window.fetch) {
     const original = window.fetch;
     window.fetch = function(...args) {
