@@ -136,7 +136,7 @@ public final class MainActivity extends PrivateActivity {
         if (!externalPackageAllowed(packageName)) return false;
         return getPackageManager().getLaunchIntentForPackage(packageName) != null;
     }
-    private void openExternalApp(String packageName, String url) {
+    private void launchExternalApp(String packageName, String url) {
         if (!trusted() || !externalPackageAllowed(packageName) || !isHttps(url)) return;
         try {
             Intent launch = getPackageManager().getLaunchIntentForPackage(packageName);
@@ -264,7 +264,7 @@ public final class MainActivity extends PrivateActivity {
             return trusted() && externalAppInstalled(packageName);
         }
         @JavascriptInterface public void openExternalApp(String packageName, String url) {
-            runOnUiThread(()->openExternalApp(packageName, url));
+            runOnUiThread(()->launchExternalApp(packageName, url));
         }
         @JavascriptInterface public void openWebsite(String url) { runOnUiThread(()->{if(trusted())openBrowser(url);}); }
         @JavascriptInterface public void enterPip(){runOnUiThread(()->{if(trusted())toast("私人模式下暂不支持画中画");});}
