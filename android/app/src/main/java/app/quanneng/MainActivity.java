@@ -125,6 +125,30 @@ public final class MainActivity extends PrivateActivity {
         Uri uri = Uri.parse(value);
         return "https".equalsIgnoreCase(uri.getScheme()) && uri.getHost() != null && uri.getUserInfo() == null;
     }
+    private static final Set<String> EXTERNAL_VIDEO_PACKAGES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+        "tv.danmaku.bili", "com.ss.android.ugc.aweme", "com.smile.gifmaker", "com.tencent.qqlive",
+        "com.qiyi.video", "com.youku.phone", "com.baidu.netdisk", "com.ss.android.article.video"
+    )));
+    private boolean externalPackageAllowed(String packageName) {
+        return packageName != null && EXTERNAL_VIDEO_PACKAGES.contains(packageName);
+    }
+    private boolean externalAppInstalled(String packageName) {
+        if (!externalPackageAllowed(packageName)) return false;
+        return getPackageManager().getLaunchIntentForPackage(packageName) != null;
+    }
+    private void openExternalApp(String packageName, String url) {
+        if (!trusted() || !externalPackageAllowed(packageName) || !isHttps(url)) return;
+        if (!externalAppInstalled(packageName)) { openBrowser(url); return; }
+        try {
+            Intent deepLink = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            deepLink.setPackage(packageName);
+            deepLink.addCategory(Intent.CATEGORY_BROWSABLE);
+            startActivity(deepLink);
+        } catch (ActivityNotFoundException error) {
+            Intent launch = getPackageManager().getLaunchIntentForPackage(packageName);
+            if (launch != null) startActivity(launch); else openBrowser(url);
+        }
+    }
     private void openBrowser(String url) {
         if (!isHttps(url)) { toast("请使用 HTTPS 网页地址"); return; }
         startActivityForResult(new Intent(this, BrowserActivity.class).putExtra("url", url),WEB_BROWSER);
@@ -238,6 +262,12 @@ public final class MainActivity extends PrivateActivity {
         @JavascriptInterface public void openSecuritySettings(){runOnUiThread(()->{if(trusted())changePrivatePassword();});}
         @JavascriptInterface public void lockApp(){runOnUiThread(()->{if(trusted())lockPrivateApp();});}
         @JavascriptInterface public void frontendReady() { runOnUiThread(()->{deliverPendingUrl();if(trusted()){deliverJumpSteps(null);deliverBrowserRecords();}}); }
+        @JavascriptInterface public boolean isExternalAppInstalled(String packageName) {
+            return trusted() && externalAppInstalled(packageName);
+        }
+        @JavascriptInterface public void openExternalApp(String packageName, String url) {
+            runOnUiThread(()->openExternalApp(packageName, url));
+        }
         @JavascriptInterface public void openWebsite(String url) { runOnUiThread(()->{if(trusted())openBrowser(url);}); }
         @JavascriptInterface public void enterPip(){runOnUiThread(()->{if(trusted())toast("私人模式下暂不支持画中画");});}
         @JavascriptInterface public void systemPlay(String url) { runOnUiThread(()->{if(trusted()&&isHttps(url)){try{JSONObject request=new JSONObject();request.put("url",url);launchMedia(request);}catch(JSONException ignored){}}}); }
