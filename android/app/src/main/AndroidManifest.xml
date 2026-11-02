@@ -6,6 +6,7 @@
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
 <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/><uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
 <uses-feature android:name="android.software.picture_in_picture" android:required="false"/>
+<queries><package android:name="tv.danmaku.bili"/><package android:name="com.ss.android.ugc.aweme"/><package android:name="com.smile.gifmaker"/><package android:name="com.tencent.qqlive"/><package android:name="com.qiyi.video"/><package android:name="com.youku.phone"/><package android:name="com.baidu.netdisk"/><package android:name="com.ss.android.article.video"/></queries>
 <application android:name="app.quanneng.PrivateApplication" android:label="全能新版" android:icon="@drawable/quanneng_icon" android:roundIcon="@drawable/quanneng_icon" android:extractNativeLibs="true" android:theme="@style/AppTheme" android:allowBackup="false" android:fullBackupContent="false" android:usesCleartextTraffic="true" android:hardwareAccelerated="true" android:supportsRtl="true">
 <activity android:name="app.quanneng.MainActivity" android:exported="true" android:launchMode="singleTop" android:configChanges="orientation|screenSize|keyboardHidden|uiMode" android:supportsPictureInPicture="false" android:windowSoftInputMode="adjustResize">
 <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
