@@ -56,3 +56,15 @@ test('explicit scan can activate a video already playing after the page gesture'
  const f=fixture();f.context.QuannengMedia.onmessage({data:'gesture'});const video=f.video('https://media.example/watch?id=1');f.context.document.querySelectorAll=()=>[video];f.context.QuannengMedia.onmessage({data:'scan'});
  assert.equal(f.messages.filter(x=>x.kind==='activate').length,1);assert.equal(f.messages.filter(x=>x.kind==='source').at(-1).url,'https://media.example/watch?id=1');
 });
+
+test('same-page source changes reset the active session without a page reload',()=>{
+ const f=fixture(),video=f.video('https://media.example/episode-1.mp4');
+ f.events.pointerdown({isTrusted:true});f.events.play({target:video});
+ f.context.document.querySelectorAll=()=>[video];
+ video.currentSrc='https://media.example/episode-2.mp4';
+ f.context.QuannengMedia.onmessage({data:'scan'});
+ const activations=f.messages.filter(x=>x.kind==='activate');
+ assert.equal(activations.length,2);
+ assert.equal(activations.at(-1).session,'2');
+ assert.equal(f.messages.filter(x=>x.kind==='source').at(-1).url,'https://media.example/episode-2.mp4');
+});
