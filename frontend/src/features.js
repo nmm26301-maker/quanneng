@@ -1,5 +1,5 @@
 export const FEATURES = Object.freeze([
- {id:'discovery',title:'网页视频智能识别 2.0',detail:'动态请求、嵌入视频与地址分类，保留原网页观看。'},
+ {id:'discovery',title:'网页视频手动识别 2.0',detail:'动态请求、嵌入视频与地址分类，保留原网页观看。'},
  {id:'dual',title:'双模式播放',detail:'原生内核与网页内核可手动选择，失败时切换。'},
  {id:'downloads',title:'下载任务管理中心',detail:'连续排队、暂停、继续、失败重试与结果导出。'},
  {id:'library',title:'本地影音海报墙',detail:'授权目录、视频封面、名称搜索和最新排序。'},

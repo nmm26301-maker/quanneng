@@ -48,6 +48,13 @@ public final class BrowserSmoke extends Instrumentation {
             await(web,"!!document.querySelector('iframe')");SystemClock.sleep(2000);
             js(web,"window.QuannengMedia.postMessage(JSON.stringify({kind:'activate',frame:location.href,session:'forged',title:'forged'}));window.QuannengMedia.postMessage(JSON.stringify({kind:'source',frame:location.href,session:'forged',url:'https://media.fixture.test/stream?id=forged',mime:'video/mp4'}));true");SystemClock.sleep(300);
             if(count(browser)!=0)throw new AssertionError("Preloads/autoplay exported before the user's play gesture");
+            ActivityMonitor postMonitor=addMonitor("app.quanneng.TransferActivity",null,false);
+            runOnMainSync(()->browser.findViewById(1420).performClick());
+            Activity post=waitForMonitorWithTimeout(postMonitor,10000);removeMonitor(postMonitor);
+            if(post==null)throw new AssertionError("Post video fallback did not open download screen");PrivateTestAccess.awaitUnlocked(this,post);
+            if(!"https://page.fixture.test/index?ready=1".equals(((android.widget.EditText)post.findViewById(1600)).getText().toString()))throw new AssertionError("Post URL not handed to download screen");
+            runOnMainSync(post::finish);awaitBrowser(browser);
+
             AtomicReference<Intent> handed=new AtomicReference<>();AtomicInteger nativeStarts=new AtomicInteger();
             ActivityMonitor handoff=new ActivityMonitor(){@Override public ActivityResult onStartActivity(Intent intent){
                 if(intent.getComponent()!=null&&"app.quanneng.SystemPlayerActivity".equals(intent.getComponent().getClassName())){
@@ -59,11 +66,11 @@ public final class BrowserSmoke extends Instrumentation {
             AtomicReference<int[]> point=new AtomicReference<>();runOnMainSync(()->{int[] xy=new int[2];web.getLocationOnScreen(xy);float d=web.getResources().getDisplayMetrics().density;point.set(new int[]{xy[0]+(int)(90*d),xy[1]+(int)(60*d)});});
             int[] xy=point.get();tap(xy[0],xy[1]);
             long deadline=SystemClock.elapsedRealtime()+15000;while(count(browser)==0&&SystemClock.elapsedRealtime()<deadline)SystemClock.sleep(100);
-            if(count(browser)==0)throw new AssertionError("Selected blob not identified; advanced="+field(browser,"advanced")+", frame="+field(browser,"activeFrame"));
+            if(count(browser)==0)throw new AssertionError("Clicked blob not identified automatically; advanced="+field(browser,"advanced")+", frame="+field(browser,"activeFrame"));
             SystemClock.sleep(1800);
             if(nativeStarts.get()!=0||browser.isFinishing())throw new AssertionError("Web playback or delayed detection launched the player without clicking transfer");
             await(web,"document.querySelector('#poster').complete&&document.querySelector('#poster').naturalWidth>0");
-            if(!deferred.get()||images.get()==0)throw new AssertionError("Fast loading did not defer then restore image resources");
+            if(deferred.get()||images.get()==0)throw new AssertionError("Default browser load delayed images or lost the poster");
             if(!"true".equals(js(web,"window.returnMarker='same-page';document.querySelector('#return-value').value='第12集保留';true")))throw new AssertionError("Cannot set return marker");
             int loadsBefore=pageLoads.get();String originalUrl=js(web,"location.href");
             ActivityMonitor playerMonitor=addMonitor("app.quanneng.SystemPlayerActivity",null,false);tap(browser.findViewById(1401));
@@ -90,12 +97,12 @@ public final class BrowserSmoke extends Instrumentation {
             if(!returned)throw new AssertionError("Error dialog did not offer return to existing page");awaitBrowser(browser);
             if(!originalUrl.equals(js(web,"location.href"))||pageLoads.get()!=loadsBefore)throw new AssertionError("Error return lost the page");
             runOnMainSync(()->browser.findViewById(1410).performClick());
-            if(getTargetContext().getSharedPreferences("browser",0).getBoolean("fast-loading",true))throw new AssertionError("Fast mode setting not persisted");
+            if(!getTargetContext().getSharedPreferences("browser",0).getBoolean("defer-images-v2",false))throw new AssertionError("Optional image deferral setting not persisted");
             runOnMainSync(()->browser.findViewById(1410).performClick());runOnMainSync(browser::finish);SystemClock.sleep(200);
             Activity app=open("app.quanneng.MainActivity",new Intent());WebView ui=(WebView)field(app,"web");await(ui,"!!document.querySelector('.bottom-nav')");
             await(ui,"JSON.parse(localStorage.getItem('quanneng-v2')||'[]').some(v=>v.name.includes('12')&&v.sourcePage.startsWith('https://page.fixture.test/'))");
             if(nativeStarts.get()!=2)throw new AssertionError("History synchronization started a video automatically");removeMonitor(handoff);
-            report("Manual transfer only; actual decoded completion and back preserve original URL, DOM and form state without reload; fast image defer/restore and title history verified");
+            report("Click playback identifies the selected video; manual transfer only; decoded completion and back preserve original URL, DOM and form state without reload");
             if(!"true".equals(js(ui,"!document.body.innerText.includes('AI')&&typeof window.Quanneng.requestAI==='undefined'")))throw new AssertionError("AI feature or bridge remains");
             js(ui,"Array.from(document.querySelectorAll('.bottom-nav button')).find(b=>b.textContent.includes('网址收藏')).click();true");await(ui,"!!document.querySelector('.bookmark-intro')");
             js(ui,"document.querySelector('.bookmark-intro button').click();true");await(ui,"!!document.querySelector('dialog[open]')");
