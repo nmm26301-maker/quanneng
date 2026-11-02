@@ -138,15 +138,13 @@ public final class MainActivity extends PrivateActivity {
     }
     private void openExternalApp(String packageName, String url) {
         if (!trusted() || !externalPackageAllowed(packageName) || !isHttps(url)) return;
-        if (!externalAppInstalled(packageName)) { openBrowser(url); return; }
         try {
-            Intent deepLink = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-            deepLink.setPackage(packageName);
-            deepLink.addCategory(Intent.CATEGORY_BROWSABLE);
-            startActivity(deepLink);
-        } catch (ActivityNotFoundException error) {
             Intent launch = getPackageManager().getLaunchIntentForPackage(packageName);
-            if (launch != null) startActivity(launch); else openBrowser(url);
+            if (launch == null) { openBrowser(url); return; }
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(launch);
+        } catch (RuntimeException error) {
+            openBrowser(url);
         }
     }
     private void openBrowser(String url) {
