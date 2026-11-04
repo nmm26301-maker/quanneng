@@ -14,16 +14,16 @@ const iconProps={size:22,weight:'regular','aria-hidden':true};
 function IconButton({label,children,...rest}){return <button className="icon-button" aria-label={label} title={label} {...rest}>{children}</button>;}
 function Modal({title,onClose,children}){const ref=useRef();useEffect(()=>{const old=document.activeElement;ref.current.showModal();return ()=>old?.focus?.();},[]);return <dialog ref={ref} onCancel={onClose} className="modal"><div className="flex items-center justify-between gap-4 mb-5"><h2 className="text-xl font-semibold">{title}</h2><IconButton label="关闭" onClick={onClose}><X {...iconProps}/></IconButton></div>{children}</dialog>;}
 function App(){
- const [tab,setTab]=useState(location.hash==='#bookmarks'?'bookmarks':location.hash==='#sources'?'sources':location.hash==='#features'?'features':'player'),[notice,setNotice]=useState(''),[shared,setShared]=useState(null);
+ const [tab,setTab]=useState(location.hash==='#bookmarks'?'bookmarks':(location.hash==='#external'||location.hash==='#sources')?'external':location.hash==='#features'?'features':'player'),[notice,setNotice]=useState(''),[shared,setShared]=useState(null);
  const timer=useRef(),main=useRef();
  const notify=s=>{setNotice(s);clearTimeout(timer.current);timer.current=setTimeout(()=>setNotice(''),5500);};
  useEffect(()=>{window.quannengOpenURL=(url,metadata)=>{setShared({url,metadata,id:uid()});setTab('player');};window.quannengBack=()=>{if(document.querySelector('dialog[open]')){document.querySelector('dialog[open]').dispatchEvent(new Event('cancel',{cancelable:true}));return true;}if(tab!=='player'){setTab('player');history.replaceState(null,'','#player');return true;}return false;};native()?.frontendReady?.();return ()=>{delete window.quannengOpenURL;delete window.quannengBack;};},[tab]);
  const switchTab=next=>{history.replaceState(null,'','#'+next);setTab(next);requestAnimationFrame(()=>main.current?.focus({preventScroll:true}));};
- const tabs=[['player','播放器',FilmStrip],['sources','平台导入',FolderOpen],['bookmarks','网址收藏',BookmarkSimple],['features','功能中心',Stack]];
+ const tabs=[['player','播放器',FilmStrip],['external','外接应用',ArrowUpRight],['bookmarks','网址收藏',BookmarkSimple],['features','功能中心',Stack]];
  return <div className="app-frame"><header className="topbar"><a href="#player" onClick={e=>{e.preventDefault();switchTab('player');}} className="brand"><img className="brand-app-icon" src="./quanneng-icon.jpg" alt=""/><span>全能新版<span className="brand-caption">QUANNENG</span></span></a><nav className="desktop-nav" aria-label="主导航">{tabs.map(([id,label,I])=><button key={id} aria-current={tab===id?'page':undefined} className={tab===id?'active':''} onClick={()=>switchTab(id)}><I {...iconProps}/>{label}</button>)}</nav><div className="flex items-center gap-1"><IconButton label="设置备用私人密码" onClick={()=>native()?.openSecuritySettings?.()}><Key {...iconProps}/></IconButton><IconButton label="立即锁定" onClick={()=>native()?.lockApp?.()}><LockKey {...iconProps}/></IconButton></div></header>
- <main ref={main} tabIndex={-1} className="main-content"><div hidden={tab!=='player'}><Player active={tab==='player'} notify={notify} shared={shared}/></div><div hidden={tab!=='bookmarks'}><Bookmarks notify={notify}/></div><div hidden={tab!=='sources'}><Sources notify={notify}/></div><div hidden={tab!=='features'}><Features notify={notify} openPlayer={()=>switchTab("player")}/></div></main>
+ <main ref={main} tabIndex={-1} className="main-content"><div hidden={tab!=='player'}><Player active={tab==='player'} notify={notify} shared={shared}/></div><div hidden={tab!=='bookmarks'}><Bookmarks notify={notify}/></div><div hidden={tab!=='external'}><ExternalApps notify={notify}/></div><div hidden={tab!=='features'}><Features notify={notify} openPlayer={()=>switchTab("player")}/></div></main>
  <nav className="bottom-nav" aria-label="主导航">{tabs.map(([id,label,I])=><button key={id} aria-current={tab===id?'page':undefined} onClick={()=>switchTab(id)} className={tab===id?'active':''}><I size={24} weight={tab===id?'fill':'regular'} aria-hidden="true"/><span>{label}</span></button>)}</nav>
- <div className={'toast '+(notice?'visible':'')} role="status" aria-live="polite">{notice}</div><footer className="footer"><span>全能 · 随心播放</span><span>与旧版并存 · 本机数据独立 · v0.4.3</span></footer></div>;
+ <div className={'toast '+(notice?'visible':'')} role="status" aria-live="polite">{notice}</div><footer className="footer"><span>全能 · 随心播放</span><span>与旧版并存 · 本机数据独立 · v0.5.3</span></footer></div>;
 }
 
 function Features({notify,openPlayer}){
@@ -33,29 +33,21 @@ function Features({notify,openPlayer}){
  return <div className="features-page"><section className="page-heading"><div><span className="eyebrow">MORE WAYS TO WATCH</span><h1>你的影音，<span>更多可能。</span></h1><p className="muted">12 项常用功能，接入原有播放器。本地处理，随时回来。</p></div></section><section className="panel"><label className="field-label">要识别的视频网页<input type="url" inputMode="url" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://…"/></label><button className="button-primary" onClick={()=>open(FEATURES[0])}><Globe {...iconProps}/>打开网页 · 自动发现视频</button><p className="muted mt-3">先在网页播放，再选择发现的媒体；受保护内容保留在原网页观看。</p></section><label className="bookmark-search"><MagnifyingGlass {...iconProps}/><span className="sr-only">搜索功能</span><input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索功能，例如字幕、投屏、下载"/></label><div className="feature-grid">{FEATURES.map((f,i)=>({...f,Icon:icons[i],number:i+1})).filter(f=>(f.title+f.detail).includes(query.trim())).map(f=><article className="feature-card" key={f.id}><div className="feature-card-top"><f.Icon size={28} aria-hidden="true"/><span>{String(f.number).padStart(2,'0')}</span></div><h2>{f.title}</h2><p>{f.detail}</p><button className="button-secondary" onClick={()=>open(f)} aria-label={'打开'+f.title}>打开功能<ArrowUpRight size={18} aria-hidden="true"/></button></article>)}</div></div>;
 }
 
-const videoSources = [
- {name:'百度网盘',url:'https://pan.baidu.com/',mode:'普通视频文件',detail:'优先通过网盘官方的下载或导出功能获取 MP4 等文件，再导入全能。'},
- {name:'哔哩哔哩',url:'https://www.bilibili.com/',mode:'分享链接 / 已导出视频',detail:'可以打开网页或分享链接；APP 离线缓存不等于独立视频文件。'},
- {name:'抖音',url:'https://www.douyin.com/',mode:'分享链接 / 已保存作品',detail:'优先使用作者允许的保存功能；公开网页是否能转播以实际播放为准。'},
- {name:'快手',url:'https://www.kuaishou.com/',mode:'分享链接 / 已保存作品',detail:'优先使用应用允许的下载或分享；不读取其私有缓存。'},
- {name:'腾讯视频',url:'https://v.qq.com/',mode:'平台内观看 / 普通文件导入',detail:'版权影视离线内容可能受 DRM 保护，不能承诺导出 MP4。'},
- {name:'爱奇艺',url:'https://www.iqiyi.com/',mode:'平台内观看 / 普通文件导入',detail:'会员缓存与加密视频保留在原平台观看；已导出的普通视频可导入。'}
-];
-function Sources({notify}){
- function transfers(){if(native()?.openTransfers)native().openTransfers();else notify('请在全能 Android APP 中使用下载与转换');}
- function openSite(item){if(native()?.openWebsite)native().openWebsite(item.url);else window.open(item.url,'_blank','noopener,noreferrer');}
- function importFile(){if(native()?.importVideoToPhone)native().importVideoToPhone();else notify('请在全能 Android APP 中使用“导入并保存到手机”');}
- function playFile(){if(native()?.openLocalVideo)native().openLocalVideo();else notify('网页版请切到“播放器”页选择本地视频');}
- return <div className="sources-page">
-  <section className="page-heading"><div><span className="eyebrow">YOUR VIDEO SOURCES</span><h1>六大平台，<span>统一入口。</span></h1><p className="muted">链接打开原网页；普通视频可从其他 APP 分享、导入，并保存到手机。</p></div></section>
-  <section className="transfer-entry panel"><div><span className="eyebrow">DOWNLOAD & CONVERT</span><h2>支持的链接，保存为自己的视频。</h2><p>使用 yt-dlp 下载支持站点的视频，用 FFmpeg 转换普通视频文件。</p></div><button className="button-primary" onClick={transfers}><DownloadSimple {...iconProps}/>下载与转换</button></section>
-  <section className="source-import panel">
-   <div><span className="eyebrow">LOCAL IMPORT</span><h2>把已经导出的视频，存进手机。</h2><p>由你选择来源文件和保存位置，复制过程只在手机本地进行，不扫描其他 APP 私有目录。</p></div>
-   <div className="source-actions"><button className="button-primary" onClick={importFile}><FolderOpen {...iconProps}/>导入并保存到手机</button><button className="button-secondary" onClick={playFile}><Play {...iconProps}/>打开本地视频</button></div>
-  </section>
-  <div className="source-grid">{videoSources.map((item,index)=><article className="source-card" key={item.name}><span className="source-number">{String(index+1).padStart(2,'0')}</span><div className="source-card-copy"><h2>{item.name}</h2><span className="source-mode">{item.mode}</span><p>{item.detail}</p></div><button className="button-secondary" onClick={()=>openSite(item)}><Globe {...iconProps}/>打开平台网页<ArrowUpRight size={18} aria-hidden="true"/></button></article>)}</div>
-  <p className="source-disclaimer"><ShieldCheck size={19} aria-hidden="true"/>不绕过 DRM、付费限制或平台权限。网页可播放不代表可以作为本地文件保存；无法独立播放时请留在平台网页。</p>
- </div>;
+const externalApps = Object.freeze([
+ {short:'B',name:'哔哩哔哩',packageName:'tv.danmaku.bili',url:'https://www.bilibili.com/',detail:'打开哔哩哔哩客户端，继续观看收藏与订阅内容。'},
+ {short:'抖',name:'抖音',packageName:'com.ss.android.ugc.aweme',url:'https://www.douyin.com/',detail:'打开抖音客户端，查看分享链接和个人内容。'},
+ {short:'快',name:'快手',packageName:'com.smile.gifmaker',url:'https://www.kuaishou.com/',detail:'打开快手客户端，继续观看和管理作品。'},
+ {short:'腾',name:'腾讯视频',packageName:'com.tencent.qqlive',url:'https://v.qq.com/',detail:'打开腾讯视频客户端，会员内容由原应用负责播放。'},
+ {short:'爱',name:'爱奇艺',packageName:'com.qiyi.video',url:'https://www.iqiyi.com/',detail:'打开爱奇艺客户端，继续观看账号内的内容。'},
+ {short:'优',name:'优酷视频',packageName:'com.youku.phone',url:'https://www.youku.tv/',detail:'打开优酷客户端，使用原应用的播放和收藏功能。'},
+ {short:'网',name:'百度网盘',packageName:'com.baidu.netdisk',url:'https://pan.baidu.com/',detail:'打开百度网盘客户端，访问自己的文件与视频。'},
+ {short:'西',name:'西瓜视频',packageName:'com.ss.android.article.video',url:'https://www.ixigua.com/',detail:'打开西瓜视频客户端，继续观看视频内容。'}
+]);
+function ExternalApps({notify}){
+ const [installed,setInstalled]=useState({});
+ useEffect(()=>{const state={};for(const app of externalApps){try{state[app.packageName]=native()?.isExternalAppInstalled?.(app.packageName)===true;}catch{state[app.packageName]=false;}}setInstalled(state);},[]);
+ function open(app){try{if(native()?.openExternalApp)native().openExternalApp(app.packageName,app.url);else window.open(app.url,'_blank','noopener,noreferrer');}catch{notify('暂时无法打开该应用，请确认手机已安装');}}
+ return <div className="external-page"><section className="page-heading"><div><span className="eyebrow">YOUR VIDEO APPS</span><h1>外接应用，<span>随时切换。</span></h1><p className="muted">直接打开手机里已安装的视频应用，播放、账号和内容都由原应用负责。</p></div></section><section className="external-intro panel"><div className="external-intro-mark"><ArrowUpRight {...iconProps}/></div><div><span className="eyebrow">APP SHORTCUTS</span><h2>把不同平台，放在同一个入口。</h2><p>全能只负责打开应用，不读取其它应用的私有缓存，也不替代它们的登录、会员和播放功能。</p></div></section><div className="external-grid">{externalApps.map((app,index)=><article className="external-card" key={app.packageName}><div className="external-card-top"><span className="external-app-mark">{app.short}</span><span className="external-number">{String(index+1).padStart(2,'0')}</span></div><div className="external-card-copy"><h2>{app.name}</h2><p>{app.detail}</p></div><div className="external-card-bottom"><span className={'external-status '+(installed[app.packageName]?'installed':'')}>{installed[app.packageName]?'已安装':'打开网页'}</span><button className="button-secondary" onClick={()=>open(app)}><ArrowUpRight {...iconProps}/>打开应用</button></div></article>)}</div><p className="external-disclaimer"><ShieldCheck size={19} aria-hidden="true"/>未安装的应用会打开对应官方网站；安装、登录、会员权限和内容播放均由对应应用处理。</p></div>;
 }
 
 function Bookmarks({notify}){
