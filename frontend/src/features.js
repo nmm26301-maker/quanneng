@@ -11,4 +11,6 @@ export const FEATURES = Object.freeze([
  {id:'tools',title:'视频工具箱',detail:'裁剪、提取音频、压缩、截图与生成无声视频。'},
  {id:'vault',title:'私人加密保险箱',detail:'本机 AES-GCM 文件加密，播放临时解密。'},
  {id:'handoff',title:'跨设备接力',detail:'分享链接与进度，本地视频可在同一 Wi-Fi 临时接力。'},
+ {id:'youtube-dubbing',title:'YouTube Dubbing 字幕翻译',detail:'打开 YouTube 字幕翻译工具，选择目标语言并保留时间轴。'},
+ {id:'movy',title:'Movy 独立观影界面',detail:'在全能内打开 movy.sx，使用独立网页界面观看。'},
 ]);
