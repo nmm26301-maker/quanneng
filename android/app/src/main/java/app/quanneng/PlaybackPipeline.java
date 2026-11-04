@@ -4,6 +4,9 @@ import android.app.ActivityManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.Format;
@@ -35,7 +38,9 @@ import java.util.concurrent.TimeUnit;
 /** Media3 官方缓存、连接复用、缓冲和错误恢复的统一入口；本地/私密源不落入网络缓存。 */
 final class PlaybackPipeline {
     static final String[] PROFILES={"均衡 · 提前缓冲最多 60 秒","流畅优先 · 提前缓冲最多 120 秒","省流量 · 优先 720p 以下"};
-    static final long CACHE_LIMIT=512L*1024*1024;
+    static final long CACHE_LIMIT=3L*1024*1024*1024;
+    static final long[] CACHE_LIMITS={512L*1024*1024,1024L*1024*1024,2L*1024*1024*1024,3L*1024*1024*1024};
+    static final String[] CACHE_LIMIT_LABELS={"512 MB","1 GB","2 GB","3 GB"};
     private static final okhttp3.OkHttpClient HTTP=new okhttp3.OkHttpClient.Builder()
         .connectTimeout(10,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS)
         .retryOnConnectionFailure(true).followSslRedirects(false).build();
@@ -56,6 +61,14 @@ final class PlaybackPipeline {
     static void profile(Context c,int value){prefs(c).edit().putInt("profile",Math.max(0,Math.min(2,value))).apply();}
     static boolean cacheSelected(Context c){return prefs(c).getBoolean("cache",true);}
     static void cacheSelected(Context c,boolean value){prefs(c).edit().putBoolean("cache",value).apply();}
+    static boolean networkAccelerationEnabled(Context c){return prefs(c).getBoolean("network-acceleration",true);}
+    static void networkAccelerationEnabled(Context c,boolean value){prefs(c).edit().putBoolean("network-acceleration",value).apply();}
+    static int cacheLimitChoice(Context c){return Math.max(0,Math.min(3,prefs(c).getInt("cache-limit-choice",3)));}
+    static void cacheLimitChoice(Context c,int value){prefs(c).edit().putInt("cache-limit-choice",Math.max(0,Math.min(3,value))).apply();}
+    static String cacheLimitSettingLabel(Context c){return CACHE_LIMIT_LABELS[cacheLimitChoice(c)];}
+    static long configuredCacheLimitBytes(Context c){return CACHE_LIMITS[cacheLimitChoice(c)];}
+    static long cacheBytes(Context c){return cache==null?0:cache.getCacheSpace();}
+    static String networkStatus(Context c){ConnectivityManager m=(ConnectivityManager)c.getSystemService(Context.CONNECTIVITY_SERVICE);Network n=m==null?null:m.getActiveNetwork();NetworkCapabilities x=m==null||n==null?null:m.getNetworkCapabilities(n);if(x==null)return "网络未连接";String t=x.hasTransport(1)?"Wi-Fi":x.hasTransport(0)?"移动网络":"其他网络";return "当前网络："+t+"\n系统估算下行："+x.getLinkDownstreamBandwidthKbps()+" Kbps\n媒体请求：OkHttp 连接复用与失败重试";}
     static boolean cacheEligible(Uri uri,Map<String,String> headers){
         if(!"https".equalsIgnoreCase(uri.getScheme()))return false;
         for(String name:headers.keySet())if(name.equalsIgnoreCase("Authorization")||name.equalsIgnoreCase("Cookie")||name.equalsIgnoreCase("Proxy-Authorization"))return false;
@@ -65,7 +78,7 @@ final class PlaybackPipeline {
         if(cache==null){
             File directory=new File(c.getCacheDir(),"streaming-v1");
             if(!directory.isDirectory()&&!directory.mkdirs())throw new IOException("无法创建视频缓存");
-            SimpleCache created=new SimpleCache(directory,new LeastRecentlyUsedCacheEvictor(CACHE_LIMIT),new StandaloneDatabaseProvider(c.getApplicationContext()));
+            SimpleCache created=new SimpleCache(directory,new LeastRecentlyUsedCacheEvictor(configuredCacheLimitBytes(c)),new StandaloneDatabaseProvider(c.getApplicationContext()));
             try{created.checkInitialization();cache=created;}catch(IOException error){created.release();throw error;}
         }
         return cache;
@@ -90,6 +103,7 @@ final class PlaybackPipeline {
     static DefaultLoadControl loadControl(Context c,boolean network){
         if(!network)return new DefaultLoadControl();
         int p=profile(c),min=p==1?30000:15000,max=p==1?120000:60000;
+        if(networkAccelerationEnabled(c)){ConnectivityManager cm=(ConnectivityManager)c.getSystemService(Context.CONNECTIVITY_SERVICE);Network active=cm==null?null:cm.getActiveNetwork();NetworkCapabilities caps=cm==null||active==null?null:cm.getNetworkCapabilities(active);int kbps=caps==null?0:caps.getLinkDownstreamBandwidthKbps();max=kbps>=8000?60000:kbps>=2000?90000:120000;min=Math.min(min,max/3);}
         ActivityManager manager=(ActivityManager)c.getSystemService(Context.ACTIVITY_SERVICE);
         int memory=manager!=null&&manager.isLowRamDevice()?32:64;
         return new DefaultLoadControl.Builder().setBufferDurationsMs(min,max,2500,8000)
