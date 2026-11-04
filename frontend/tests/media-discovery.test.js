@@ -7,10 +7,10 @@ function fixture(){
  const messages=[],events={};let response;
  class LocalURL extends URL {static createObjectURL(){return 'blob:https://frame.example/'+Math.random();}static revokeObjectURL(){}}
  class XHR{addEventListener(event,fn){this.listener=fn;}send(){this.status=200;this.responseURL='https://media.example/unrelated';this.listener();}getResponseHeader(){return 'video/mp4';}}
- const context={URL:LocalURL,Set,Map,WeakMap,Date,XMLHttpRequest:XHR,location:{href:'https://frame.example/player',hostname:'frame.example'},document:{title:'我的剧 第12集',querySelector:()=>null,querySelectorAll:()=>[],addEventListener:(name,fn)=>events[name]=fn},performance:{getEntriesByType:()=>[{name:'https://media.example/other.mp4'}]}};
+ const context={URL:LocalURL,Set,Map,WeakMap,Date,XMLHttpRequest:XHR,MutationObserver:class{observe(){}},location:{href:'https://frame.example/player',hostname:'frame.example'},document:{title:'我的剧 第12集',querySelector:()=>null,querySelectorAll:()=>[],addEventListener:(name,fn)=>events[name]=fn},performance:{getEntriesByType:()=>[{name:'https://media.example/other.mp4'}]}};
  context.window=context;context.fetch=()=>Promise.resolve(response);context.QuannengMedia={postMessage:raw=>messages.push(JSON.parse(raw))};vm.runInNewContext(script,context);
  const video=(src)=>({tagName:'VIDEO',currentSrc:src,paused:false,querySelector:()=>null,getAttribute:()=>null});
- return {context,messages,events,video,fetch:async(url,type='video/mp4')=>{response={ok:true,url,headers:{get:()=>type},blob:async()=>({})};return context.fetch(url);}};
+ return {context,messages,events,video,fetch:async(url,type='video/mp4',body='')=>{const bytes=new TextEncoder().encode(body);const make=()=>({body:{getReader(){let done=false;return {read:async()=>{if(done)return {done:true};done=true;return {done:false,value:bytes};},cancel:async()=>{}};}},arrayBuffer:async()=>bytes});response={ok:true,url,headers:{get:()=>type},clone:make,blob:async()=>({})};return context.fetch(url);}};
 }
 test('preloaded sources, page scans and autoplay never export a video',async()=>{
  const f=fixture();await f.fetch('https://media.example/preload.mp4');new f.context.XMLHttpRequest().send();
@@ -45,4 +45,14 @@ test('reusing one video element for the next episode replaces source session and
  const f=fixture(),video=f.video('https://media.example/ep12.mp4');f.events.pointerdown({isTrusted:true});f.events.play({target:video});
  video.currentSrc='https://media.example/ep13.mp4';f.context.document.title='我的剧 第13集';f.events.pointerdown({isTrusted:true});f.events.play({target:video});
  const sources=f.messages.filter(x=>x.kind==='source');assert.equal(sources.at(-1).session,'2');assert.equal(sources.at(-1).title,'我的剧 第13集');assert.equal(sources.at(-1).url,'https://media.example/ep13.mp4');assert.equal(f.messages.filter(x=>x.kind==='activate').length,2);
+});
+
+test('content sniffing recognizes a manifest with no extension and generic MIME',async()=>{
+ const f=fixture();f.events.pointerdown({isTrusted:true});await f.fetch('https://media.example/session-token','application/octet-stream','#EXTM3U\\n#EXT-X-TARGETDURATION:6');f.events.play({target:f.video('blob:https://frame.example/mse')});
+ assert.deepEqual(f.messages.filter(x=>x.kind==='source').map(x=>x.url),['https://media.example/session-token']);
+});
+
+test('explicit scan can activate a video already playing after the page gesture',()=>{
+ const f=fixture();f.context.QuannengMedia.onmessage({data:'gesture'});const video=f.video('https://media.example/watch?id=1');f.context.document.querySelectorAll=()=>[video];f.context.QuannengMedia.onmessage({data:'scan'});
+ assert.equal(f.messages.filter(x=>x.kind==='activate').length,1);assert.equal(f.messages.filter(x=>x.kind==='source').at(-1).url,'https://media.example/watch?id=1');
 });
