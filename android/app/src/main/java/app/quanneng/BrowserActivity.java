@@ -44,6 +44,7 @@ public final class BrowserActivity extends PrivateActivity {
     private boolean advanced,playing,blob,encrypted;
     private String activeFrame="",activeSession="",activeTitle="";
     private boolean handingOff;
+    private boolean ultraWebAcceleration;
     private long webGestureAt=-60000;
     private final AtomicInteger generation=new AtomicInteger();
 
@@ -56,16 +57,16 @@ public final class BrowserActivity extends PrivateActivity {
         EditText address=new EditText(this);address.setSingleLine();address.setTextSize(13);address.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_URI);address.setText(getIntent().getStringExtra("url"));toolbar.addView(address,new LinearLayout.LayoutParams(0,dp(56),1));
         Button go=new Button(this);go.setText("打开");go.setOnClickListener(v->{String u=address.getText().toString().trim();if(MainActivity.isHttps(u))web.loadUrl(u);else toast("请填写完整的 HTTPS 网页地址");});toolbar.addView(go);
         LinearLayout pageTools=new LinearLayout(this);pageTools.setPadding(dp(8),0,dp(8),0);content.addView(pageTools);
-        fastLoading=getSharedPreferences("browser",0).getBoolean("fast-loading",true);
+        fastLoading=getSharedPreferences("browser",0).getBoolean("fast-loading",true);ultraWebAcceleration=getSharedPreferences("browser",0).getBoolean("ultra-web",false);
         fastButton=new Button(this);fastButton.setId(1410);pageTools.addView(fastButton,new LinearLayout.LayoutParams(0,dp(48),1));
-        fastButton.setOnClickListener(v->{fastLoading=!fastLoading;getSharedPreferences("browser",0).edit().putBoolean("fast-loading",fastLoading).apply();updateFastButton();if(!fastLoading)web.getSettings().setBlockNetworkImage(false);toast(fastLoading?"下次打开网页优先加载内容，图片稍后显示":"已切换完整加载");});updateFastButton();
+        fastButton.setOnClickListener(v->{if(!fastLoading){fastLoading=true;}else{ultraWebAcceleration=!ultraWebAcceleration;}getSharedPreferences("browser",0).edit().putBoolean("fast-loading",fastLoading).putBoolean("ultra-web",ultraWebAcceleration).apply();applyWebAcceleration();updateFastButton();toast(ultraWebAcceleration?"网页千倍加速实验模式已开启":"网页加速设置已更新");});updateFastButton();
         Button refresh=new Button(this);refresh.setText("刷新");refresh.setOnClickListener(v->web.reload());pageTools.addView(refresh,new LinearLayout.LayoutParams(dp(80),dp(48)));
         pageProgress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);pageProgress.setMax(100);content.addView(pageProgress,new LinearLayout.LayoutParams(-1,dp(3)));
         web=new WebView(this);content.addView(web,new LinearLayout.LayoutParams(-1,0,1));
         mediaButton=new Button(this);mediaButton.setId(1401);mediaButton.setSingleLine();mediaButton.setEllipsize(android.text.TextUtils.TruncateAt.END);content.addView(mediaButton,new LinearLayout.LayoutParams(-1,dp(60)));mediaButton.setOnClickListener(v->scan(true));
         note=new TextView(this);note.setTextSize(11);note.setTextColor(Color.rgb(169,183,184));note.setPadding(16,8,16,12);content.addView(note);
         WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setUseWideViewPort(true);s.setLoadWithOverviewMode(true);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);s.setBlockNetworkImage(fastLoading);s.setMediaPlaybackRequiresUserGesture(true);
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);s.setBlockNetworkImage(fastLoading);s.setMediaPlaybackRequiresUserGesture(true);s.setDatabaseEnabled(true);applyWebAcceleration();
         floatingPlay=new Button(this);floatingPlay.setText("转到全能播放");floatingPlay.setOnClickListener(v->scan(true));floatingPlay.setVisibility(View.GONE);
         configureDiscovery();updateCount();
         web.setWebChromeClient(new WebChromeClient(){
@@ -219,7 +220,8 @@ public final class BrowserActivity extends PrivateActivity {
         try{startActivityForResult(intent,WEB_PLAYER);}catch(RuntimeException error){handingOff=false;updateCount();toast("播放器打开失败，请重试");}
     }
     private void releaseImages(long epoch){if(web!=null&&!isDestroyed()&&epoch==pageEpoch)web.getSettings().setBlockNetworkImage(false);}
-    private void updateFastButton(){fastButton.setText(fastLoading?"网页加速：开":"网页加速：关");fastButton.setSelected(fastLoading);}
+    private void applyWebAcceleration(){if(web==null)return;WebSettings s=web.getSettings();s.setBlockNetworkImage(fastLoading);s.setCacheMode(ultraWebAcceleration?WebSettings.LOAD_CACHE_ELSE_NETWORK:WebSettings.LOAD_DEFAULT);}
+    private void updateFastButton(){fastButton.setText(ultraWebAcceleration?"网页千倍加速：实验中":fastLoading?"网页加速：开":"网页加速：关");fastButton.setSelected(fastLoading);}
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);
         if(request==WEB_PLAYER){
