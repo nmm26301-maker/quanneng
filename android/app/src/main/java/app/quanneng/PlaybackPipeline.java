@@ -41,7 +41,9 @@ final class PlaybackPipeline {
     static final long CACHE_LIMIT=3L*1024*1024*1024;
     static final long[] CACHE_LIMITS={512L*1024*1024,1024L*1024*1024,2L*1024*1024*1024,3L*1024*1024*1024};
     static final String[] CACHE_LIMIT_LABELS={"512 MB","1 GB","2 GB","3 GB"};
-    private static final okhttp3.OkHttpClient HTTP=new okhttp3.OkHttpClient.Builder().dispatcher(new okhttp3.Dispatcher(){ {setMaxRequests(64);setMaxRequestsPerHost(16);} })
+    private static final okhttp3.Dispatcher DISPATCHER=dispatcher();
+    private static okhttp3.Dispatcher dispatcher(){okhttp3.Dispatcher d=new okhttp3.Dispatcher();d.setMaxRequests(64);d.setMaxRequestsPerHost(16);return d;}
+    private static final okhttp3.OkHttpClient HTTP=new okhttp3.OkHttpClient.Builder().dispatcher(DISPATCHER)
         .connectTimeout(10,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS)
         .retryOnConnectionFailure(true).followSslRedirects(false)
         .connectionPool(new okhttp3.ConnectionPool(16,5,TimeUnit.MINUTES))
