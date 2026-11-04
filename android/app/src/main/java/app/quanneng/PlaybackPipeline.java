@@ -43,7 +43,9 @@ final class PlaybackPipeline {
     static final String[] CACHE_LIMIT_LABELS={"512 MB","1 GB","2 GB","3 GB"};
     private static final okhttp3.OkHttpClient HTTP=new okhttp3.OkHttpClient.Builder()
         .connectTimeout(10,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true).followSslRedirects(false).build();
+        .retryOnConnectionFailure(true).followSslRedirects(false)
+        .connectionPool(new okhttp3.ConnectionPool(16,5,TimeUnit.MINUTES))
+        .build();
     private static SimpleCache cache;
     private final DataSource.Factory upstream,media;
     final boolean cacheEnabled;
@@ -103,7 +105,7 @@ final class PlaybackPipeline {
     static DefaultLoadControl loadControl(Context c,boolean network){
         if(!network)return new DefaultLoadControl();
         int p=profile(c),min=p==1?30000:15000,max=p==1?120000:60000;
-        if(networkAccelerationEnabled(c)){ConnectivityManager cm=(ConnectivityManager)c.getSystemService(Context.CONNECTIVITY_SERVICE);Network active=cm==null?null:cm.getActiveNetwork();NetworkCapabilities caps=cm==null||active==null?null:cm.getNetworkCapabilities(active);int kbps=caps==null?0:caps.getLinkDownstreamBandwidthKbps();max=kbps>=8000?60000:kbps>=2000?90000:120000;min=Math.min(min,max/3);}
+        if(networkAccelerationEnabled(c)){ConnectivityManager cm=(ConnectivityManager)c.getSystemService(Context.CONNECTIVITY_SERVICE);Network active=cm==null?null:cm.getActiveNetwork();NetworkCapabilities caps=cm==null||active==null?null:cm.getNetworkCapabilities(active);int kbps=caps==null?0:caps.getLinkDownstreamBandwidthKbps();max=kbps>=8000?90000:kbps>=2000?150000:240000;min=Math.min(min,max/3);}
         ActivityManager manager=(ActivityManager)c.getSystemService(Context.ACTIVITY_SERVICE);
         int memory=manager!=null&&manager.isLowRamDevice()?32:64;
         return new DefaultLoadControl.Builder().setBufferDurationsMs(min,max,2500,8000)
