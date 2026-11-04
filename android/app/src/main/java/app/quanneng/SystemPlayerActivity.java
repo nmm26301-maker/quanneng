@@ -205,7 +205,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
     @Override public void onBackPressed(){if(touchLocked){lockedHint();return;}if(fullscreen){setFullscreen(false);return;}super.onBackPressed();}
     private void lockedHint(){showJumpFeedback("已锁定触控 · 长按右侧锁按钮解除");}
     private void setTouchLocked(boolean value){
-        touchLocked=value;handler.removeCallbacks(hideControls);scrubbing=false;touchShield.setVisibility(value?View.VISIBLE:View.GONE);unlockTouchArea.setVisibility(value?View.VISIBLE:View.GONE);screenLockButton.setAlpha(value?.35f:1f);unlockTouchButton.setAlpha(value?.45f:1f);touchLayer.setImportantForAccessibility(value?View.IMPORTANT_FOR_ACCESSIBILITY_NO:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);setChrome(!value);
+        touchLocked=value;handler.removeCallbacks(hideControls);scrubbing=false;touchShield.setVisibility(value?View.VISIBLE:View.GONE);unlockTouchArea.setVisibility(value?View.VISIBLE:View.GONE);screenLockButton.setVisibility(value?View.GONE:View.VISIBLE);screenLockButton.setAlpha(1f);unlockTouchButton.setAlpha(value?.45f:1f);touchLayer.setImportantForAccessibility(value?View.IMPORTANT_FOR_ACCESSIBILITY_NO:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);setChrome(!value);
         if(value){lockedHint();unlockTouchButton.requestFocus();}else{showJumpFeedback("已解除防误触锁定");playButton.requestFocus();}
     }
     private void seekExact(int value){jumpTarget=-1;try{if(media!=null)media.seekTo((long)value);else video.seekTo(value);}catch(IllegalStateException error){toast("视频尚未准备好，请稍后重试");}}
