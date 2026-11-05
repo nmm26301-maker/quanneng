@@ -1,0 +1,10 @@
+import {cpSync,existsSync,rmSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const source=path.join(root,'frontend/dist');
+const output=path.join(root,'out');
+if(!existsSync(path.join(source,'index.html')))throw Error('Build the frontend before staging the Site');
+rmSync(output,{recursive:true,force:true});
+cpSync(source,output,{recursive:true});
+console.log('Staged React app in out/');
