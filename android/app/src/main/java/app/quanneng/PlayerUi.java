@@ -18,7 +18,7 @@ final class PlayerUi {
     static GradientDrawable surface(Context c,int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(c,radius));return d;}
     static Drawable feedback(Context c,int color,int radius){return new RippleDrawable(ColorStateList.valueOf(0x40FFFFFF),surface(c,color,radius),surface(c,Color.WHITE,radius));}
     static Drawable progressDrawable(Context c){
-        int track=dp(c,3); GradientDrawable background=surface(c,0x66FFFFFF,3);GradientDrawable cached=surface(c,0x99FF9A8F,3);GradientDrawable played=surface(c,0xFFFF604D,3);
+        int track=dp(c,3); GradientDrawable background=surface(c,0x55FFFFFF,3);ClipDrawable cached=new ClipDrawable(surface(c,0x99FFFFFF,3),Gravity.START,ClipDrawable.HORIZONTAL);ClipDrawable played=new ClipDrawable(surface(c,0xFFFF604D,3),Gravity.START,ClipDrawable.HORIZONTAL);
         LayerDrawable layers=new LayerDrawable(new Drawable[]{background,cached,played});
         for(int i=0;i<3;i++){layers.setLayerHeight(i,track);layers.setLayerGravity(i,Gravity.CENTER_VERTICAL);}
         layers.setId(0,android.R.id.background);layers.setId(1,android.R.id.secondaryProgress);layers.setId(2,android.R.id.progress);return layers;
