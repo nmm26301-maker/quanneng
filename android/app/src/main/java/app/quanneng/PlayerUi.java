@@ -18,12 +18,12 @@ final class PlayerUi {
     static GradientDrawable surface(Context c,int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(c,radius));return d;}
     static Drawable feedback(Context c,int color,int radius){return new RippleDrawable(ColorStateList.valueOf(0x40FFFFFF),surface(c,color,radius),surface(c,Color.WHITE,radius));}
     static Drawable progressDrawable(Context c){
-        int track=dp(c,3); GradientDrawable background=surface(c,0x66FFFFFF,3);GradientDrawable cached=surface(c,0x99B8ED96,3);GradientDrawable played=surface(c,ACCENT,3);
+        int track=dp(c,3); GradientDrawable background=surface(c,0x66FFFFFF,3);GradientDrawable cached=surface(c,0x99FF9A8F,3);GradientDrawable played=surface(c,0xFFFF604D,3);
         LayerDrawable layers=new LayerDrawable(new Drawable[]{background,cached,played});
         for(int i=0;i<3;i++){layers.setLayerHeight(i,track);layers.setLayerGravity(i,Gravity.CENTER_VERTICAL);}
         layers.setId(0,android.R.id.background);layers.setId(1,android.R.id.secondaryProgress);layers.setId(2,android.R.id.progress);return layers;
     }
-    static Drawable progressThumb(Context c){GradientDrawable thumb=new GradientDrawable();thumb.setShape(GradientDrawable.OVAL);thumb.setColor(ACCENT);thumb.setSize(dp(c,14),dp(c,14));return thumb;}
+    static Drawable progressThumb(Context c){GradientDrawable thumb=new GradientDrawable();thumb.setShape(GradientDrawable.OVAL);thumb.setColor(0xFFFF604D);thumb.setSize(dp(c,14),dp(c,14));return thumb;}
     static TextView text(Context c,String value,int size,int color){TextView t=new TextView(c);t.setText(value);t.setTextSize(size);t.setTextColor(color);t.setFontFeatureSettings("tnum");return t;}
     static Button chip(Context c,String value){Button b=new Button(c);b.setText(value);b.setAllCaps(false);b.setTextSize(14);b.setTextColor(TEXT);b.setMinWidth(0);b.setMinimumWidth(0);b.setMinHeight(dp(c,48));b.setPadding(dp(c,8),0,dp(c,8),0);b.setBackground(feedback(c,SURFACE,12));return b;}
     static ImageButton icon(Context c,String name,String label,boolean primary){ImageButton b=new ImageButton(c);b.setScaleType(ImageView.ScaleType.FIT_CENTER);b.setMinimumWidth(dp(c,48));b.setMinimumHeight(dp(c,48));b.setPadding(dp(c,13),dp(c,13),dp(c,13),dp(c,13));b.setBackground(feedback(c,primary?ACCENT:0x00212B2E,primary?28:14));setIcon(b,name,label,primary);return b;}
