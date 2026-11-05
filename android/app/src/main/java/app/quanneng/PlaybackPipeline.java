@@ -76,9 +76,7 @@ final class PlaybackPipeline {
     static long cacheBytes(Context c){return cache==null?0:cache.getCacheSpace();}
     static String networkStatus(Context c){ConnectivityManager m=(ConnectivityManager)c.getSystemService(Context.CONNECTIVITY_SERVICE);Network n=m==null?null:m.getActiveNetwork();NetworkCapabilities x=m==null||n==null?null:m.getNetworkCapabilities(n);if(x==null)return "网络未连接";String t=x.hasTransport(1)?"Wi-Fi":x.hasTransport(0)?"移动网络":"其他网络";return "当前网络："+t+"\n系统估算下行："+x.getLinkDownstreamBandwidthKbps()+" Kbps\n媒体请求：OkHttp 连接复用与失败重试";}
     static boolean cacheEligible(Uri uri,Map<String,String> headers){
-        if(!"https".equalsIgnoreCase(uri.getScheme()))return false;
-        for(String name:headers.keySet())if(name.equalsIgnoreCase("Authorization")||name.equalsIgnoreCase("Cookie")||name.equalsIgnoreCase("Proxy-Authorization"))return false;
-        return true;
+        return "https".equalsIgnoreCase(uri.getScheme())||"http".equalsIgnoreCase(uri.getScheme());
     }
     private static synchronized SimpleCache cache(Context c)throws IOException{
         if(cache==null){
