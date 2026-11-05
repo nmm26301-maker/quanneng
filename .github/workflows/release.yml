@@ -1,0 +1,85 @@
+name: Build Quanneng Next release APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install build dependencies
+        run: |
+          python3 -m pip install --disable-pip-version-check cryptography
+          npm ci --prefix frontend
+          npm run build --prefix frontend
+
+      - name: Restore formal release signing key
+        env:
+          RECOVERY_PASSWORD_JSON: ${{ secrets.QUANNENG_SIGNING_RECOVERY_PASSWORD_JSON }}
+          RECOVERY_PASSWORD: ${{ secrets.QUANNENG_SIGNING_RECOVERY_PASSWORD }}
+        run: |
+          if [ -n "$RECOVERY_PASSWORD_JSON" ]; then
+            printf '%s' "$RECOVERY_PASSWORD_JSON" > "$RUNNER_TEMP/QuannengNext-signing-recovery-password.json"
+          elif [ -n "$RECOVERY_PASSWORD" ]; then
+            RECOVERY_PASSWORD="$RECOVERY_PASSWORD" python3 - <<'PY'
+          import json, os
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "QuannengNext-signing-recovery-password.json"), "w", encoding="utf-8") as f:
+              json.dump({"recovery_password": os.environ["RECOVERY_PASSWORD"]}, f)
+          PY
+          else
+            echo "Missing QUANNENG_SIGNING_RECOVERY_PASSWORD_JSON or QUANNENG_SIGNING_RECOVERY_PASSWORD repository secret"
+            exit 78
+          fi
+          chmod 600 "$RUNNER_TEMP/QuannengNext-signing-recovery-password.json"
+          mkdir -m 700 "$RUNNER_TEMP/quanneng-signing"
+          python3 android/tools/restore-signing.py \
+            --password-file "$RUNNER_TEMP/QuannengNext-signing-recovery-password.json" \
+            --out "$RUNNER_TEMP/quanneng-signing/signing-backup.zip"
+          unzip -q "$RUNNER_TEMP/quanneng-signing/signing-backup.zip" -d "$RUNNER_TEMP/quanneng-signing/private"
+
+      - name: Prepare Android SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/quanneng-sdk"
+          curl --fail --location --retry 3 https://dl.google.com/android/repository/build-tools_r35_linux.zip -o "$RUNNER_TEMP/build-tools.zip"
+          curl --fail --location --retry 3 https://dl.google.com/android/repository/platform-35_r02.zip -o "$RUNNER_TEMP/platform.zip"
+          echo "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88  $RUNNER_TEMP/build-tools.zip" | sha256sum -c -
+          echo "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0  $RUNNER_TEMP/platform.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/build-tools.zip" -d "$RUNNER_TEMP/quanneng-sdk"
+          unzip -q "$RUNNER_TEMP/platform.zip" -d "$RUNNER_TEMP/quanneng-sdk"
+
+      - name: Build and verify signed arm64 release
+        run: |
+          python3 android/tools/build-release.py \
+            --signing-config "$RUNNER_TEMP/quanneng-signing/private/signing.json" \
+            --sdk "$RUNNER_TEMP/quanneng-sdk" \
+            --out "$RUNNER_TEMP/QuannengNext-v0.5.26-cover-release.apk" \
+            --abi arm64-v8a
+          "$RUNNER_TEMP/quanneng-sdk/android-15/apksigner" verify --verbose --print-certs "$RUNNER_TEMP/QuannengNext-v0.5.26-cover-release.apk"
+          mkdir -p release
+          cp "$RUNNER_TEMP/QuannengNext-v0.5.26-cover-release.apk" release/QuannengNext-v0.5.26-cover-release.apk
+          sha256sum release/QuannengNext-v0.5.26-cover-release.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuannengNext-v0.5.26-cover-release
+          path: release/QuannengNext-v0.5.26-cover-release.apk
+          if-no-files-found: error
