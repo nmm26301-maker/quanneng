@@ -167,7 +167,7 @@ public final class SystemPlayerActivity extends PrivateActivity {
         FrameLayout.LayoutParams hp=(FrameLayout.LayoutParams)overlayHeader.getLayoutParams();hp.leftMargin=fullscreen?safeLeft:0;hp.rightMargin=fullscreen?safeRight:0;hp.topMargin=fullscreen?safeTop:0;overlayHeader.setLayoutParams(hp);
         FrameLayout.LayoutParams unlock=(FrameLayout.LayoutParams)unlockTouchArea.getLayoutParams();unlock.rightMargin=safeRight+dp(16);unlock.leftMargin=safeLeft+dp(16);unlockTouchArea.setLayoutParams(unlock);FrameLayout.LayoutParams sl=(FrameLayout.LayoutParams)sideLeft.getLayoutParams();sl.leftMargin=safeLeft+dp(8);sideLeft.setLayoutParams(sl);FrameLayout.LayoutParams sr=(FrameLayout.LayoutParams)sideRight.getLayoutParams();sr.rightMargin=safeRight+dp(8);sideRight.setLayoutParams(sr);
         FrameLayout.LayoutParams feedback=(FrameLayout.LayoutParams)jumpFeedback.getLayoutParams();feedback.gravity=fullscreen?Gravity.CENTER:Gravity.TOP|Gravity.CENTER_HORIZONTAL;feedback.topMargin=fullscreen?0:Math.max(dp(16),(int)((width-dp(24))*9f/32f)-dp(24));jumpFeedback.setLayoutParams(feedback);
-        controls.setBackground(fullscreen?new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0x00000000,0x99000000}):PlayerUi.surface(this,PlayerUi.SURFACE,0));
+        controls.setBackground(fullscreen?new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0x00000000,0x66000000}):PlayerUi.surface(this,0xAA12191D,0));
     }
     private void setFullscreen(boolean value){
         fullscreen=value;header.setVisibility(value?View.GONE:View.VISIBLE);detailScroll.setVisibility(value?View.GONE:View.VISIBLE);setChrome(true);PlayerUi.setIcon(fullButton,value?"collapse":"fullscreen",value?"退出全屏":"进入全屏",false);
