@@ -71,15 +71,15 @@ jobs:
           python3 android/tools/build-release.py \
             --signing-config "$RUNNER_TEMP/quanneng-signing/private/signing.json" \
             --sdk "$RUNNER_TEMP/quanneng-sdk" \
-            --out "$RUNNER_TEMP/QuannengNext-v0.5.28-cover-release.apk" \
+            --out "$RUNNER_TEMP/QuannengNext-v0.5.29-cover-release.apk" \
             --abi arm64-v8a
-          "$RUNNER_TEMP/quanneng-sdk/android-15/apksigner" verify --verbose --print-certs "$RUNNER_TEMP/QuannengNext-v0.5.28-cover-release.apk"
+          "$RUNNER_TEMP/quanneng-sdk/android-15/apksigner" verify --verbose --print-certs "$RUNNER_TEMP/QuannengNext-v0.5.29-cover-release.apk"
           mkdir -p release
-          cp "$RUNNER_TEMP/QuannengNext-v0.5.28-cover-release.apk" release/QuannengNext-v0.5.28-cover-release.apk
-          sha256sum release/QuannengNext-v0.5.28-cover-release.apk
+          cp "$RUNNER_TEMP/QuannengNext-v0.5.29-cover-release.apk" release/QuannengNext-v0.5.29-cover-release.apk
+          sha256sum release/QuannengNext-v0.5.29-cover-release.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: QuannengNext-v0.5.28-cover-release
-          path: release/QuannengNext-v0.5.28-cover-release.apk
+          name: QuannengNext-v0.5.29-cover-release
+          path: release/QuannengNext-v0.5.29-cover-release.apk
           if-no-files-found: error
