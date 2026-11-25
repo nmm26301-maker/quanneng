@@ -20,7 +20,7 @@ import java.util.*;
 /** 现有全能控制界面的薄适配层；实际解复用、缓冲与解码由 GSY + Media3 负责。 */
 public final class MatureVideoView extends FrameLayout {
     private static final class Engine extends IjkExo2MediaPlayer {
-        Engine(Context context){super(context);setClipChildren(true);mRendererFactory=new DefaultRenderersFactory(context).setEnableDecoderFallback(true);}
+        Engine(Context context){super(context);mRendererFactory=new DefaultRenderersFactory(context).setEnableDecoderFallback(true);}
         ExoPlayer player(){return mInternalPlayer;}
     }
     private final SurfaceView surface;
