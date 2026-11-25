@@ -1,0 +1,82 @@
+name: Player display restoration
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/player-display.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  display:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci --prefix frontend && npm test --prefix frontend && npm run build --prefix frontend
+      - name: Prepare pinned SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/quanneng-sdk"
+          curl -fsSL --retry 3 https://dl.google.com/android/repository/build-tools_r35_linux.zip -o "$RUNNER_TEMP/build-tools.zip"
+          curl -fsSL --retry 3 https://dl.google.com/android/repository/platform-35_r02.zip -o "$RUNNER_TEMP/platform.zip"
+          echo "bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88  $RUNNER_TEMP/build-tools.zip" | sha256sum -c -
+          echo "0988cacad01b38a18a47bac14a0695f246bc76c1b06c0eeb8eb0dc825ab0c8e0  $RUNNER_TEMP/platform.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/build-tools.zip" -d "$RUNNER_TEMP/quanneng-sdk"
+          unzip -q "$RUNNER_TEMP/platform.zip" -d "$RUNNER_TEMP/quanneng-sdk"
+      - name: Compile arm64 payload for private release signing
+        run: |
+          python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/test.p12" --out "$RUNNER_TEMP/Quanneng-v0.5.30-arm64-payload.apk" --abi arm64-v8a --development-signing
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Quanneng-v0.5.30-arm64-payload
+          path: ${{ runner.temp }}/Quanneng-v0.5.30-arm64-payload.apk
+      - name: Build emulator packages
+        run: |
+          python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/test.p12" --out "$RUNNER_TEMP/display-debug.apk" --abi x86_64 --development-signing
+          python3 android/tools/build-tests.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/test.p12" --out "$RUNNER_TEMP/display-tests.apk"
+      - uses: android-actions/setup-android@035682743ab223ec9c6169af09811dff8247e520
+        with:
+          cmdline-tools-version: '12266719'
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Verify zoom and portrait on decoded video
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            adb install -r "$RUNNER_TEMP/display-debug.apk"
+            adb install -r "$RUNNER_TEMP/display-tests.apk"
+            adb shell settings put secure immersive_mode_confirmations confirmed
+            adb shell input keyevent KEYCODE_WAKEUP
+            adb shell wm dismiss-keyguard
+            timeout 180s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.SecuritySmoke | tee "$RUNNER_TEMP/security-display.txt"
+            grep -q QUANNENG_SECURITY_OK "$RUNNER_TEMP/security-display.txt"
+            timeout 150s adb shell am instrument -w app.quanneng.next.tests/app.quanneng.tests.PlayerDisplaySmoke | tee "$RUNNER_TEMP/player-display.txt"
+            adb logcat -d -v brief > "$RUNNER_TEMP/player-display-logcat.txt"
+            adb pull /sdcard/Android/data/app.quanneng.next/files "$RUNNER_TEMP/player-display-images"
+            grep -q QUANNENG_PLAYER_DISPLAY_OK "$RUNNER_TEMP/player-display.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Player-display-verification
+          path: |
+            ${{ runner.temp }}/player-display*.txt
+            ${{ runner.temp }}/security-display.txt
+            ${{ runner.temp }}/player-display-images
