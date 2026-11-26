@@ -48,7 +48,7 @@ public final class PlayerDisplaySmoke extends Instrumentation {
             verifyLandscapeTouchLock(a);
             ui(()->{check(a.findViewById(1314).isShown(),"Orientation entry hidden in full screen");check(a.findViewById(1315).isShown(),"Zoom entry hidden in full screen");check(a.findViewById(1005).isShown(),"Exit full screen entry hidden");a.findViewById(1314).performClick();});
             orientation(a,Configuration.ORIENTATION_PORTRAIT);screenshot(a,"player-portrait-zoom");
-            ui(()->{try{check(a.getRequestedOrientation()==ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,"Portrait mode not explicit");check((Float)call(a.findViewById(1000),"getZoom",new Class<?>[]{})==2f,"Rotation lost zoom");check((Long)PrivateTestAccess.field(a,"mediaEpoch")==epoch,"Rotation reloaded video");check(!(Boolean)call(a.findViewById(1000),"isPlaying",new Class<?>[]{}),"Rotation resumed paused video");check(!a.findViewById(2400).isShown(),"Landscape side zones cover portrait controls");a.findViewById(1314).performClick();}catch(Exception e){throw new RuntimeException(e);}});
+            ui(()->{try{check(a.getRequestedOrientation()==ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,"Portrait mode not explicit");check((Float)call(a.findViewById(1000),"getZoom",new Class<?>[]{})==2f,"Rotation lost zoom");check((Long)PrivateTestAccess.field(a,"mediaEpoch")==epoch,"Rotation reloaded video");check(!(Boolean)call(a.findViewById(1000),"isPlaying",new Class<?>[]{}),"Rotation resumed paused video");check(!a.findViewById(2401).isShown(),"Landscape side zones cover portrait controls");a.findViewById(1314).performClick();}catch(Exception e){throw new RuntimeException(e);}});
             orientation(a,Configuration.ORIENTATION_LANDSCAPE);
             ui(()->{a.findViewById(1314).performClick();});orientation(a,Configuration.ORIENTATION_PORTRAIT);
             ui(()->{a.findViewById(1005).performClick();});
@@ -109,11 +109,12 @@ public final class PlayerDisplaySmoke extends Instrumentation {
         event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
         try{check(getUiAutomation().injectInputEvent(event,true),"Android rejected touchscreen input");}finally{event.recycle();}
     }
-    private void awaitPosition(Activity player,int expected)throws Exception{
-        long end=SystemClock.elapsedRealtime()+6000;int actual=-1;
+    private void awaitPosition(Activity player,int expected){
+        long end=SystemClock.elapsedRealtime()+6000;
+        AtomicInteger actual=new AtomicInteger(-1);
         while(SystemClock.elapsedRealtime()<end){
-            actual=(Integer)call(player.findViewById(1000),"getCurrentPosition",new Class<?>[]{});
-            if(Math.abs(actual-expected)<1200)return;
+            ui(()->{try{actual.set((Integer)call(player.findViewById(1000),"getCurrentPosition",new Class<?>[]{}));}catch(Exception e){throw new RuntimeException(e);}});
+            if(Math.abs(actual.get()-expected)<1200)return;
             SystemClock.sleep(80);
         }
         throw new AssertionError("Expected position "+expected+" but reached "+actual);
