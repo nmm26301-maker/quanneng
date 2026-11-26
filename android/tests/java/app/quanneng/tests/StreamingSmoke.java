@@ -4,6 +4,7 @@ import android.app.*;
 import android.content.*;
 import android.net.Uri;
 import android.os.*;
+import android.view.accessibility.AccessibilityNodeInfo;
 import java.io.*;
 import java.lang.reflect.*;
 import java.util.*;
@@ -23,7 +24,8 @@ public final class StreamingSmoke extends Instrumentation {
             policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),true);
             cacheChecks();
             player=open();Activity active=player;verifySubtitle(active);
-            AtomicReference<Throwable> uiError=new AtomicReference<>();runOnMainSync(()->{try{active.findViewById(1801).performClick();}catch(Throwable e){uiError.set(e);}});check(uiError.get()==null,"Optimization settings failed");sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK);
+            runOnMainSync(()->active.findViewById(1801).performClick());
+            dismissStreamingSettings();
             NativeNetwork network=new NativeNetwork();network.throttled=true;network.interrupt=true;
             Uri uri=Uri.parse("https://stream-fixture.invalid/weak-"+System.nanoTime()+".mp4");Object cached=cached(uri,Collections.emptyMap(),network.factory());
             play(active,cached,uri);awaitPlaying(active,5000,45000);check(network.opens.get()>=2&&network.interrupted.get(),"Interrupted request was not retried");
@@ -41,6 +43,17 @@ public final class StreamingSmoke extends Instrumentation {
         finally{if(player!=null){Activity p=player;runOnMainSync(p::finish);}try{policy("profile",new Class<?>[]{Context.class,int.class},context(),1);policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),true);}catch(Exception ignored){}}
     }
     private static Throwable cause(Throwable e){return e instanceof InvocationTargetException?((InvocationTargetException)e).getTargetException():e;}
+    private void dismissStreamingSettings(){
+        long deadline=SystemClock.elapsedRealtime()+5000;
+        while(SystemClock.elapsedRealtime()<deadline){
+            AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();
+            if(root!=null)for(AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText("完成")){
+                if(android.text.TextUtils.equals("完成",node.getText())&&node.isClickable()&&node.performAction(AccessibilityNodeInfo.ACTION_CLICK)){waitForIdleSync();return;}
+            }
+            SystemClock.sleep(100);
+        }
+        throw new AssertionError("Optimization settings dialog did not open");
+    }
     private void verifySubtitle(Activity active)throws Exception{
         File text=new File(context().getCacheDir(),"streaming-test-subtitle.vtt");
         try(FileOutputStream out=new FileOutputStream(text)){out.write("WEBVTT\n\n00:00:00.000 --> 00:00:15.000\nStreamingSubtitleVerified\n".getBytes("UTF-8"));}
