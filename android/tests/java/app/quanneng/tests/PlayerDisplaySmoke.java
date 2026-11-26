@@ -104,7 +104,19 @@ public final class PlayerDisplaySmoke extends Instrumentation {
     private static int[] screenCenter(View view){
         int[] point=new int[2];view.getLocationOnScreen(point);point[0]+=view.getWidth()/2;point[1]+=view.getHeight()/2;return point;
     }
-    private int[] point(Activity player,int id){AtomicReference<int[]> point=new AtomicReference<>();ui(()->point.set(screenCenter(player.findViewById(id))));return point.get();}
+    private int[] point(Activity player,int id){
+        AtomicReference<int[]> target=new AtomicReference<>();
+        long deadline=SystemClock.elapsedRealtime()+3000;
+        while(SystemClock.elapsedRealtime()<deadline){
+            ui(()->{
+                View view=player.findViewById(id);
+                if(view.isShown()&&view.isLaidOut()&&view.getWidth()>0&&view.getHeight()>0)target.set(screenCenter(view));
+            });
+            if(target.get()!=null)return target.get();
+            SystemClock.sleep(50);
+        }
+        throw new AssertionError("Touch target did not lay out: "+id);
+    }
     private void shellInput(String command)throws java.io.IOException{
         try(ParcelFileDescriptor descriptor=getUiAutomation().executeShellCommand("input "+command);
             java.io.FileInputStream output=new java.io.FileInputStream(descriptor.getFileDescriptor())){
