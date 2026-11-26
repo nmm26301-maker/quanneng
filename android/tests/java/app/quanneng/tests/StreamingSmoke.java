@@ -64,12 +64,31 @@ public final class StreamingSmoke extends Instrumentation {
         policy("clearCache",new Class<?>[]{Context.class},context());NativeNetwork network=new NativeNetwork();Object upstream=network.factory();Uri uri=Uri.parse("https://stream-fixture.invalid/range-"+System.nanoTime()+".mp4");Object cached=cached(uri,Collections.emptyMap(),upstream);
         check(Arrays.equals(read(cached,uri,0,fixture.length),fixture),"Initial cache content differs");int initial=network.opens.get();network.offline=true;
         Object reopened=cached(uri,Collections.emptyMap(),upstream);check(Arrays.equals(read(reopened,uri,100,4000),Arrays.copyOfRange(fixture,100,4100)),"Offline Range differs");check(network.opens.get()==initial,"Offline cache read reached network");
-        check(cached(uri,Collections.singletonMap("Cookie","private=yes"),upstream)==upstream,"Cookie source persisted");check(cached(uri,Collections.singletonMap("authorization","Basic private"),upstream)==upstream,"Authorization source persisted");check(cached(Uri.parse("content://app.quanneng.next.media/vault-open/a"),Collections.emptyMap(),upstream)==upstream,"Vault source persisted");
-        check(cached(Uri.parse("http://192.168.1.2/a.mp4"),Collections.emptyMap(),upstream)==upstream,"LAN source persisted");
-        Object identity=cached(uri,Collections.singletonMap("Referer","https://other.invalid/"),upstream);boolean blocked=false;try{read(identity,uri,0,100);}catch(InvocationTargetException expected){blocked=true;}check(blocked,"Different source context reused cached bytes");
+        check(cached(Uri.parse("content://app.quanneng.next.media/vault-open/a"),Collections.emptyMap(),upstream)==upstream,"Vault source persisted");
+        Uri lan=Uri.parse("http://192.168.1.2/"+System.nanoTime()+".mp4");
+        Map<String,String> cookie=Collections.singletonMap("Cookie","private=yes");
+        Map<String,String> authorization=Collections.singletonMap("authorization","Basic private");
+        Map<String,String> referer=Collections.singletonMap("Referer","https://other.invalid/");
+        for(Map<String,String> headers:Arrays.asList(cookie,authorization,referer)){
+            assertCacheMiss(cached(uri,headers,upstream),uri);
+        }
+        network.offline=false;
+        byte[] prefix=Arrays.copyOfRange(fixture,0,100);
+        check(Arrays.equals(read(cached(lan,cookie,upstream),lan,0,100),prefix),"Authenticated HTTP cache fill failed");
+        network.offline=true;
+        check(Arrays.equals(read(cached(lan,cookie,upstream),lan,0,100),prefix),"Authenticated HTTP cache replay failed");
+        assertCacheMiss(cached(lan,Collections.emptyMap(),upstream),lan);
+        assertCacheMiss(cached(lan,Collections.singletonMap("Cookie","private=no"),upstream),lan);
         policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),false);check(cached(uri,Collections.emptyMap(),upstream)==upstream,"Disabled cache still active");policy("cacheSelected",new Class<?>[]{Context.class,boolean.class},context(),true);
         policy("profile",new Class<?>[]{Context.class,int.class},context(),2);check(((Integer)policy("profile",new Class<?>[]{Context.class},context()))==2,"Profile not saved");policy("profile",new Class<?>[]{Context.class,int.class},context(),1);
-        report("Disk cache exact bytes and offline Range, per-context isolation, private-source bypass and setting persistence verified");
+        report("Offline HTTP/HTTPS ranges, credential isolation, vault bypass and cache settings verified");
+    }
+    private void assertCacheMiss(Object factory,Uri uri)throws Exception{
+        try{read(factory,uri,0,100);}catch(InvocationTargetException unavailable){
+            if(unavailable.getCause() instanceof IOException)return;
+            throw unavailable;
+        }
+        throw new AssertionError("Different source context reused cached bytes");
     }
     private Activity open()throws Exception{
         ActivityMonitor monitor=addMonitor("app.quanneng.SystemPlayerActivity",null,false);

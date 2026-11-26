@@ -89,9 +89,17 @@ public final class BrowserSmoke extends Instrumentation {
             }
             if(!returned)throw new AssertionError("Error dialog did not offer return to existing page");awaitBrowser(browser);
             if(!originalUrl.equals(js(web,"location.href"))||pageLoads.get()!=loadsBefore)throw new AssertionError("Error return lost the page");
-            runOnMainSync(()->browser.findViewById(1410).performClick());
-            if(getTargetContext().getSharedPreferences("browser",0).getBoolean("fast-loading",true))throw new AssertionError("Fast mode setting not persisted");
-            runOnMainSync(()->browser.findViewById(1410).performClick());runOnMainSync(browser::finish);SystemClock.sleep(200);
+            SharedPreferences settings=getTargetContext().getSharedPreferences("browser",0);
+            boolean initialExperimental=settings.getBoolean("ultra-web",false);
+            for(boolean expected:new boolean[]{!initialExperimental,initialExperimental}){
+                runOnMainSync(()->{
+                    browser.findViewById(1410).performClick();
+                    int cacheMode=expected?WebSettings.LOAD_CACHE_ELSE_NETWORK:WebSettings.LOAD_DEFAULT;
+                    if(web.getSettings().getCacheMode()!=cacheMode)throw new AssertionError("Experimental mode did not update WebView caching");
+                });
+                if(!settings.getBoolean("fast-loading",true)||settings.getBoolean("ultra-web",false)!=expected)throw new AssertionError("Experimental mode setting not persisted");
+            }
+            runOnMainSync(browser::finish);SystemClock.sleep(200);
             Activity app=open("app.quanneng.MainActivity",new Intent());WebView ui=(WebView)field(app,"web");await(ui,"!!document.querySelector('.bottom-nav')");
             await(ui,"JSON.parse(localStorage.getItem('quanneng-v2')||'[]').some(v=>v.name.includes('12')&&v.sourcePage.startsWith('https://page.fixture.test/'))");
             if(nativeStarts.get()!=2)throw new AssertionError("History synchronization started a video automatically");removeMonitor(handoff);
