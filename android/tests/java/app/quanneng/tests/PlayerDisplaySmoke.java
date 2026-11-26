@@ -45,6 +45,7 @@ public final class PlayerDisplaySmoke extends Instrumentation {
             final long epoch=(Long)PrivateTestAccess.field(a,"mediaEpoch");
             ui(()->{try{call(a.findViewById(1000),"setZoom",new Class<?>[]{float.class},2f);}catch(Exception e){throw new RuntimeException(e);}a.findViewById(1005).performClick();});
             orientation(a,Configuration.ORIENTATION_LANDSCAPE);screenshot(a,"player-landscape-zoom");
+            verifyLandscapeTouchLock(a);
             ui(()->{check(a.findViewById(1314).isShown(),"Orientation entry hidden in full screen");check(a.findViewById(1315).isShown(),"Zoom entry hidden in full screen");check(a.findViewById(1005).isShown(),"Exit full screen entry hidden");a.findViewById(1314).performClick();});
             orientation(a,Configuration.ORIENTATION_PORTRAIT);screenshot(a,"player-portrait-zoom");
             ui(()->{try{check(a.getRequestedOrientation()==ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,"Portrait mode not explicit");check((Float)call(a.findViewById(1000),"getZoom",new Class<?>[]{})==2f,"Rotation lost zoom");check((Long)PrivateTestAccess.field(a,"mediaEpoch")==epoch,"Rotation reloaded video");check(!(Boolean)call(a.findViewById(1000),"isPlaying",new Class<?>[]{}),"Rotation resumed paused video");check(!a.findViewById(2400).isShown(),"Landscape side zones cover portrait controls");a.findViewById(1314).performClick();}catch(Exception e){throw new RuntimeException(e);}});
@@ -59,6 +60,63 @@ public final class PlayerDisplaySmoke extends Instrumentation {
             result.putString("stream","QUANNENG_PLAYER_DISPLAY_OK\n");finish(Activity.RESULT_OK,result);
         }catch(Throwable e){e.printStackTrace();result.putString("stream","QUANNENG_PLAYER_DISPLAY_FAILED: "+e+"\n");finish(Activity.RESULT_CANCELED,result);}
         finally{if(player!=null){final Activity a=player;ui(a::finish);}}
+    }
+    private void verifyLandscapeTouchLock(Activity player)throws Exception{
+        ui(()->{
+            View left=player.findViewById(2401),right=player.findViewById(2411);
+            check(left.isShown()&&right.isShown()&&left.getAlpha()==0f&&right.getAlpha()==0f,"Landscape side targets must be invisible and available");
+            View panel=player.findViewById(1006),progress=player.findViewById(1007);
+            View speed=(View)readField(player,"speedButton");
+            check(screenCenter(progress)[1]<screenCenter(speed)[1],"Speed belongs below the progress bar");
+            check(screenCenter(progress)[1]>panel.getRootView().getHeight()*0.7f,"Progress belongs near the bottom");
+            check(((android.graphics.drawable.LayerDrawable)((SeekBar)progress).getProgressDrawable()).findDrawableByLayerId(android.R.id.secondaryProgress)!=null,"Buffered track missing");
+            player.findViewById(1310).performClick();
+            check(!player.findViewById(1312).isShown()&&!panel.isShown(),"Lock displayed the controls before a double tap");
+        });
+        ui(()->{
+            check(screenCenter(player.findViewById(2400))[1]<screenCenter(player.findViewById(2401))[1],"Left top target must sit above the center rail");
+            check(screenCenter(player.findViewById(2410))[1]<screenCenter(player.findViewById(2411))[1],"Right top target must sit above the center rail");
+            check(screenCenter(player.findViewById(2401))[1]<screenCenter(player.findViewById(2402))[1],"Left jump order changed");
+            check(screenCenter(player.findViewById(2411))[1]<screenCenter(player.findViewById(2412))[1],"Right jump order changed");
+            try{call(player.findViewById(1000),"seekTo",new Class<?>[]{int.class},650000);}catch(Exception e){throw new RuntimeException(e);}
+        });
+        awaitPosition(player,650000);
+        for(int[] jump:new int[][]{{2400,640000},{2410,650000},{2402,590000},{2412,650000}}){
+            tap(point(player,jump[0]));
+            awaitPosition(player,jump[1]);
+        }
+        ui(()->check(!player.findViewById(1312).isShown(),"A single tap revealed the lock"));
+        int[] side=point(player,2411);
+        tap(side);SystemClock.sleep(80);tap(side);
+        SystemClock.sleep(350);
+        ui(()->check(player.findViewById(1312).isShown(),"One double tap on a side target must reveal the lock"));
+        awaitPosition(player,650000);
+        int[] unlock=point(player,1312);long down=SystemClock.uptimeMillis();
+        inject(down,MotionEvent.ACTION_DOWN,unlock);SystemClock.sleep(850);inject(down,MotionEvent.ACTION_UP,unlock);
+        ui(()->check(!player.findViewById(1312).isShown()&&player.findViewById(1006).isShown(),"Long press must unlock and restore controls"));
+        report("Invisible landscape rails and top endpoints seek; double tap takes priority over seeking; long press unlocks; buffered line and speed placement verified");
+    }
+    private static Object readField(Activity activity,String name){
+        try{return PrivateTestAccess.field(activity,name);}catch(Exception e){throw new RuntimeException(e);}
+    }
+    private static int[] screenCenter(View view){
+        int[] point=new int[2];view.getLocationOnScreen(point);point[0]+=view.getWidth()/2;point[1]+=view.getHeight()/2;return point;
+    }
+    private int[] point(Activity player,int id){AtomicReference<int[]> point=new AtomicReference<>();ui(()->point.set(screenCenter(player.findViewById(id))));return point.get();}
+    private void tap(int[] point){long down=SystemClock.uptimeMillis();inject(down,MotionEvent.ACTION_DOWN,point);SystemClock.sleep(45);inject(down,MotionEvent.ACTION_UP,point);}
+    private void inject(long down,int action,int[] point){
+        MotionEvent event=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,point[0],point[1],0);
+        event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+        try{check(getUiAutomation().injectInputEvent(event,true),"Android rejected touchscreen input");}finally{event.recycle();}
+    }
+    private void awaitPosition(Activity player,int expected)throws Exception{
+        long end=SystemClock.elapsedRealtime()+6000;int actual=-1;
+        while(SystemClock.elapsedRealtime()<end){
+            actual=(Integer)call(player.findViewById(1000),"getCurrentPosition",new Class<?>[]{});
+            if(Math.abs(actual-expected)<1200)return;
+            SystemClock.sleep(80);
+        }
+        throw new AssertionError("Expected position "+expected+" but reached "+actual);
     }
     private void verifyPinch(Activity p)throws Exception{
         AtomicReference<Throwable> failure=new AtomicReference<>();runOnMainSync(()->{try{

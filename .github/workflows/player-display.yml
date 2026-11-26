@@ -35,11 +35,11 @@ jobs:
           unzip -q "$RUNNER_TEMP/platform.zip" -d "$RUNNER_TEMP/quanneng-sdk"
       - name: Compile arm64 payload for private release signing
         run: |
-          python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/test.p12" --out "$RUNNER_TEMP/Quanneng-v0.5.30-arm64-payload.apk" --abi arm64-v8a --development-signing
+          python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/test.p12" --out "$RUNNER_TEMP/Quanneng-v0.5.31-arm64-payload.apk" --abi arm64-v8a --development-signing
       - uses: actions/upload-artifact@v4
         with:
-          name: Quanneng-v0.5.30-arm64-payload
-          path: ${{ runner.temp }}/Quanneng-v0.5.30-arm64-payload.apk
+          name: Quanneng-v0.5.31-arm64-payload
+          path: ${{ runner.temp }}/Quanneng-v0.5.31-arm64-payload.apk
       - name: Build emulator packages
         run: |
           python3 android/tools/build.py --sdk "$RUNNER_TEMP/quanneng-sdk" --keystore "$RUNNER_TEMP/test.p12" --out "$RUNNER_TEMP/display-debug.apk" --abi x86_64 --development-signing

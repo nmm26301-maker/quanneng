@@ -7,6 +7,7 @@ import android.content.res.Configuration;
 import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import tv.danmaku.ijk.media.exo2.IjkExo2MediaPlayer;
@@ -42,7 +43,8 @@ public final class SystemPlayerActivity extends PrivateActivity {
     private View touchShield;
     private LinearLayout unlockTouchArea;
     private GestureDetector lockGesture;
-    private long lockedTapAt;
+    private Button topLeftJump,topRightJump;
+    private final Rect lockedJumpBounds=new Rect();
     private boolean touchLocked;
     private ProgressBar loading;
     private PrecisionSeekBar progress;
@@ -95,18 +97,37 @@ public final class SystemPlayerActivity extends PrivateActivity {
         touchLayer.setOnTouchListener(new PlayerGestures(this,new PlayerGestures.Target(){public boolean ready(){return SystemPlayerActivity.this.ready;}public int position(){return video.getCurrentPosition();}public int duration(){return video.getDuration();}public void seek(int ms){clearLoop();seekExact(ms);setChrome(true);}public void toggle(){togglePlay();}public void tap(){if(fullscreen)setChrome(!chromeVisible);}public void feedback(String s){showJumpFeedback(s);}public float speed(){return selectedSpeed;}public void speed(float f){if(media!=null){try{media.setSpeed(f,1f);selectedSpeed=f;speedButton.setText(f+"×");}catch(RuntimeException ignored){}}}public float zoom(){return video.getZoom();}public void zoomAt(float value,float x,float y){video.setZoomAt(value,x,y);updateZoomLabels();}public void pan(float dx,float dy){video.panBy(dx,dy);}}));
         buildControls();buildDetails();buildOverlayHeader();
         jumpFeedback=PlayerUi.text(this,"",14,PlayerUi.TEXT);jumpFeedback.setId(1300);jumpFeedback.setGravity(Gravity.CENTER);jumpFeedback.setPadding(dp(18),dp(12),dp(18),dp(12));jumpFeedback.setBackground(PlayerUi.surface(this,0xEF14251E,16));jumpFeedback.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);jumpFeedback.setVisibility(View.GONE);videoFrame.addView(jumpFeedback,new FrameLayout.LayoutParams(-2,-2,Gravity.CENTER));
-        lockGesture=new GestureDetector(this,new GestureDetector.SimpleOnGestureListener(){@Override public boolean onDown(MotionEvent e){return true;}@Override public boolean onSingleTapConfirmed(MotionEvent e){lockedHint();return true;}@Override public boolean onDoubleTap(MotionEvent e){showUnlockAffordance();return true;}});
+        lockGesture=new GestureDetector(this,new GestureDetector.SimpleOnGestureListener(){
+            @Override public boolean onDown(MotionEvent event){return true;}
+            @Override public boolean onSingleTapConfirmed(MotionEvent event){if(touchLocked)tapLockedJump(event);return true;}
+            @Override public boolean onDoubleTap(MotionEvent event){showUnlockAffordance();return true;}
+        });
         touchShield=new View(this);touchShield.setId(1311);touchShield.setVisibility(View.GONE);touchShield.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);touchShield.setOnTouchListener((v,event)->touchLocked&&lockGesture.onTouchEvent(event));videoFrame.addView(touchShield,new FrameLayout.LayoutParams(-1,-1));
         unlockTouchArea=new LinearLayout(this);unlockTouchArea.setOrientation(1);unlockTouchArea.setGravity(Gravity.CENTER);unlockTouchArea.setPadding(dp(4),dp(4),dp(4),dp(4));unlockTouchArea.setBackground(PlayerUi.surface(this,0x44000000,16));unlockTouchArea.setVisibility(View.GONE);videoFrame.addView(unlockTouchArea,new FrameLayout.LayoutParams(dp(76),dp(88),Gravity.END|Gravity.CENTER_VERTICAL));
         unlockTouchButton=PlayerUi.icon(this,"lock","长按解除防误触锁定",false);unlockTouchButton.setId(1312);unlockTouchArea.addView(unlockTouchButton,new LinearLayout.LayoutParams(dp(48),dp(48)));TextView unlockHint=PlayerUi.text(this,"长按解锁",12,PlayerUi.TEXT);unlockHint.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);unlockTouchArea.addView(unlockHint);unlockTouchButton.setOnClickListener(v->lockedHint());unlockTouchButton.setOnLongClickListener(v->{setTouchLocked(false);v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);return true;});
-        sideLeft=new LinearLayout(this);sideLeft.setOrientation(1);sideLeft.setGravity(Gravity.CENTER);for(int index=0;index<3;index++){int jump=index==0?0:index-1;Button b=makeJumpButton(jump,true,2400+index);LinearLayout.LayoutParams sideButton=new LinearLayout.LayoutParams(-1,dp(54));sideButton.setMargins(dp(4),dp(4),dp(4),dp(4));sideLeft.addView(b,sideButton);}videoFrame.addView(sideLeft,new FrameLayout.LayoutParams(dp(140),-2,Gravity.START|Gravity.CENTER_VERTICAL));
-        sideRight=new LinearLayout(this);sideRight.setOrientation(1);sideRight.setGravity(Gravity.CENTER);for(int index=0;index<3;index++){int jump=index==0?2:index+1;Button b=makeJumpButton(jump,true,2410+index);LinearLayout.LayoutParams sideButton=new LinearLayout.LayoutParams(-1,dp(54));sideButton.setMargins(dp(4),dp(4),dp(4),dp(4));sideRight.addView(b,sideButton);}videoFrame.addView(sideRight,new FrameLayout.LayoutParams(dp(140),-2,Gravity.END|Gravity.CENTER_VERTICAL));
+        sideLeft=makeJumpRail(0,2400,Gravity.START);
+        sideRight=makeJumpRail(2,2410,Gravity.END);
+        topLeftJump=makeJumpButton(0,true,2400);
+        topRightJump=makeJumpButton(2,true,2410);
+        videoFrame.addView(topLeftJump,new FrameLayout.LayoutParams(dp(132),dp(54),Gravity.TOP|Gravity.START));
+        videoFrame.addView(topRightJump,new FrameLayout.LayoutParams(dp(132),dp(54),Gravity.TOP|Gravity.END));
+        updateJumpZones();
         root.post(this::sizePlayer);root.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol||b-t!=ob-ot)sizePlayer();});
         root.setOnApplyWindowInsetsListener((view,insets)->{
             if(Build.VERSION.SDK_INT>=30){android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());android.graphics.Insets stable=insets.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()|WindowInsets.Type.displayCutout());android.graphics.Insets gestures=insets.getInsets(WindowInsets.Type.systemGestures());safeLeft=Math.max(stable.left,gestures.left);safeRight=Math.max(stable.right,gestures.right);safeBottom=Math.max(stable.bottom,gestures.bottom);safeTop=stable.top;view.setPadding(fullscreen?0:bars.left,fullscreen?0:bars.top,fullscreen?0:bars.right,fullscreen?0:bars.bottom);}
             else{safeLeft=insets.getStableInsetLeft();safeRight=insets.getStableInsetRight();safeBottom=insets.getStableInsetBottom();safeTop=insets.getStableInsetTop();}
             sizePlayer();return insets;});
         if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);
+    }
+    private LinearLayout makeJumpRail(int firstStep,int firstId,int gravity){
+        LinearLayout rail=new LinearLayout(this);rail.setOrientation(LinearLayout.VERTICAL);rail.setGravity(Gravity.CENTER);
+        for(int i=0;i<2;i++){
+            LinearLayout.LayoutParams target=new LinearLayout.LayoutParams(-1,dp(54));
+            target.setMargins(dp(4),dp(4),dp(4),dp(4));
+            rail.addView(makeJumpButton(firstStep+i,true,firstId+i+1),target);
+        }
+        videoFrame.addView(rail,new FrameLayout.LayoutParams(dp(140),-2,gravity|Gravity.CENTER_VERTICAL));
+        return rail;
     }
     private void buildControls(){
         controls=new LinearLayout(this);controls.setId(1006);controls.setOrientation(1);controls.setGravity(Gravity.BOTTOM);controls.setPadding(dp(12),0,dp(12),0);
@@ -162,13 +183,15 @@ public final class SystemPlayerActivity extends PrivateActivity {
         int width=root.getWidth()-root.getPaddingLeft()-root.getPaddingRight();if(width<=0)return;
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,fullscreen?0:(int)((width-dp(24))*9f/16f)+dp(136),fullscreen?1:0);if(!fullscreen)p.setMargins(dp(12),0,dp(12),0);videoFrame.setLayoutParams(p);
         FrameLayout.LayoutParams vp=(FrameLayout.LayoutParams)video.getLayoutParams();vp.gravity=fullscreen?Gravity.CENTER:Gravity.TOP|Gravity.CENTER_HORIZONTAL;vp.bottomMargin=fullscreen?0:dp(136);video.setLayoutParams(vp);videoFrame.setBackground(PlayerUi.surface(this,Color.BLACK,fullscreen?0:18));
-        jumpSettings.setVisibility(View.GONE);fullscreenJumps.setVisibility(View.GONE);landscapeJumps.setVisibility(View.GONE);sideLeft.setVisibility(fullscreen&&!portraitFullscreen?View.VISIBLE:View.GONE);sideRight.setVisibility(fullscreen&&!portraitFullscreen?View.VISIBLE:View.GONE);FrameLayout.LayoutParams cp=(FrameLayout.LayoutParams)controls.getLayoutParams();cp.height=fullscreen?dp(184):dp(136);cp.leftMargin=fullscreen?safeLeft:0;cp.rightMargin=fullscreen?safeRight:0;cp.bottomMargin=fullscreen?safeBottom:0;controls.setLayoutParams(cp);
+        jumpSettings.setVisibility(View.GONE);fullscreenJumps.setVisibility(View.GONE);landscapeJumps.setVisibility(View.GONE);updateJumpZones();FrameLayout.LayoutParams cp=(FrameLayout.LayoutParams)controls.getLayoutParams();cp.height=fullscreen?dp(184):dp(136);cp.leftMargin=fullscreen?safeLeft:0;cp.rightMargin=fullscreen?safeRight:0;cp.bottomMargin=fullscreen?safeBottom:0;controls.setLayoutParams(cp);
         LinearLayout lockParent=fullscreen?overlayHeader:controlButtons;if(screenLockButton.getParent()!=lockParent){((android.view.ViewGroup)screenLockButton.getParent()).removeView(screenLockButton);if(fullscreen)lockParent.addView(screenLockButton,Math.max(0,lockParent.getChildCount()-1),new LinearLayout.LayoutParams(dp(48),dp(48)));else lockParent.addView(screenLockButton,new LinearLayout.LayoutParams(dp(48),dp(48)));}screenLockButton.setContentDescription(fullscreen?"防误触锁定":"防误触锁定（进入全屏）");
         controlSpace.setVisibility(fullscreen?View.GONE:View.VISIBLE);controlButtons.setVisibility(fullscreen?View.GONE:View.VISIBLE);LinearLayout.LayoutParams playSize=(LinearLayout.LayoutParams)playButton.getLayoutParams();playSize.width=dp(fullscreen?48:56);playSize.height=dp(fullscreen?48:56);playButton.setLayoutParams(playSize);
         for(Button button:jumpButtons)if(button.getId()>=1200)button.setBackground(PlayerUi.feedback(this,Color.TRANSPARENT,12));
         jumpSettings.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.SURFACE,12));speedButton.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.SURFACE,12));playButton.setBackground(PlayerUi.feedback(this,fullscreen?Color.TRANSPARENT:PlayerUi.ACCENT,28));updatePlay();
         FrameLayout.LayoutParams hp=(FrameLayout.LayoutParams)overlayHeader.getLayoutParams();hp.leftMargin=fullscreen?safeLeft:0;hp.rightMargin=fullscreen?safeRight:0;hp.topMargin=fullscreen?safeTop:0;overlayHeader.setLayoutParams(hp);
         FrameLayout.LayoutParams unlock=(FrameLayout.LayoutParams)unlockTouchArea.getLayoutParams();unlock.rightMargin=safeRight+dp(16);unlock.leftMargin=safeLeft+dp(16);unlockTouchArea.setLayoutParams(unlock);FrameLayout.LayoutParams sl=(FrameLayout.LayoutParams)sideLeft.getLayoutParams();sl.leftMargin=safeLeft+dp(8);sideLeft.setLayoutParams(sl);FrameLayout.LayoutParams sr=(FrameLayout.LayoutParams)sideRight.getLayoutParams();sr.rightMargin=safeRight+dp(8);sideRight.setLayoutParams(sr);
+        FrameLayout.LayoutParams leftTop=(FrameLayout.LayoutParams)topLeftJump.getLayoutParams();leftTop.leftMargin=safeLeft+dp(12);leftTop.topMargin=safeTop+dp(8);topLeftJump.setLayoutParams(leftTop);
+        FrameLayout.LayoutParams rightTop=(FrameLayout.LayoutParams)topRightJump.getLayoutParams();rightTop.rightMargin=safeRight+dp(12);rightTop.topMargin=safeTop+dp(8);topRightJump.setLayoutParams(rightTop);
         FrameLayout.LayoutParams feedback=(FrameLayout.LayoutParams)jumpFeedback.getLayoutParams();feedback.gravity=fullscreen?Gravity.CENTER:Gravity.TOP|Gravity.CENTER_HORIZONTAL;feedback.topMargin=fullscreen?0:Math.max(dp(16),(int)((width-dp(24))*9f/32f)-dp(24));jumpFeedback.setLayoutParams(feedback);
         GradientDrawable glass=fullscreen?new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0x00000000,0x00000000}):PlayerUi.surface(this,0x00000000,0);controls.setBackground(glass);
     }
@@ -197,7 +220,23 @@ public final class SystemPlayerActivity extends PrivateActivity {
         else getWindow().getDecorView().setSystemUiVisibility(fullscreen?View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY:0);
         root.requestApplyInsets();
     }
-    private void setChrome(boolean show){show=show&&!touchLocked;chromeVisible=show;controls.setVisibility(show?View.VISIBLE:View.GONE);overlayHeader.setVisibility(fullscreen&&show?View.VISIBLE:View.GONE);if(sideLeft!=null){sideLeft.setVisibility(fullscreen&&!portraitFullscreen?View.VISIBLE:View.GONE);sideRight.setVisibility(fullscreen&&!portraitFullscreen?View.VISIBLE:View.GONE);}if(show){clockUpdatedAt=0;updateOverlayClock();scheduleHide();}}
+    private void setChrome(boolean show){show=show&&!touchLocked;chromeVisible=show;controls.setVisibility(show?View.VISIBLE:View.GONE);overlayHeader.setVisibility(fullscreen&&show?View.VISIBLE:View.GONE);updateJumpZones();if(show){clockUpdatedAt=0;updateOverlayClock();scheduleHide();}}
+    private void updateJumpZones(){
+        boolean landscape=fullscreen&&!portraitFullscreen;
+        sideLeft.setVisibility(landscape?View.VISIBLE:View.GONE);
+        sideRight.setVisibility(landscape?View.VISIBLE:View.GONE);
+        topLeftJump.setVisibility(landscape&&touchLocked?View.VISIBLE:View.GONE);
+        topRightJump.setVisibility(landscape&&touchLocked?View.VISIBLE:View.GONE);
+    }
+    private void tapLockedJump(MotionEvent event){
+        int x=(int)event.getX()+touchShield.getLeft(),y=(int)event.getY()+touchShield.getTop();
+        for(Button button:jumpButtons){
+            if(button.getId()<2400||!button.isShown()||!button.isEnabled())continue;
+            button.getDrawingRect(lockedJumpBounds);
+            videoFrame.offsetDescendantRectToMyCoords(button,lockedJumpBounds);
+            if(lockedJumpBounds.contains(x,y)){button.performClick();return;}
+        }
+    }
     private void updateOverlayClock(){if(overlayClock==null||!fullscreen||!chromeVisible)return;long now=SystemClock.elapsedRealtime();if(now-clockUpdatedAt<1000)return;clockUpdatedAt=now;String value=android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date());if(!value.contentEquals(overlayClock.getText())){overlayClock.setText(value);overlayClock.setContentDescription("当前时间 "+value);}}
     private void scheduleHide(){handler.removeCallbacks(hideControls);if(fullscreen)handler.postDelayed(hideControls,4000);}
     private void updatePlay(){PlayerUi.setIcon(playButton,video.isPlaying()?"pause":"play",video.isPlaying()?"暂停":"播放",!fullscreen);}
@@ -228,15 +267,18 @@ public final class SystemPlayerActivity extends PrivateActivity {
     @Override public void onConfigurationChanged(Configuration config){super.onConfigurationChanged(config);root.post(this::sizePlayer);}
     @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(fullscreen){if(focused){applySystemBars();setChrome(true);}else handler.removeCallbacks(hideControls);}}
     @Override public void onBackPressed(){if(touchLocked){lockedHint();return;}if(fullscreen){setFullscreen(false);return;}super.onBackPressed();}
-    private void lockedHint(){showJumpFeedback("已锁定触控 · 长按右侧锁按钮解除");}
+    private void lockedHint(){showJumpFeedback("已锁定触控 · 双击屏幕显示解锁按钮");}
     private void showUnlockAffordance(){
         if(!touchLocked)return;
         unlockTouchArea.bringToFront();unlockTouchArea.setVisibility(View.VISIBLE);unlockTouchArea.setAlpha(0f);unlockTouchArea.setScaleX(.86f);unlockTouchArea.setScaleY(.86f);unlockTouchArea.requestFocus();
         unlockTouchArea.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(180).start();
     }
     private void setTouchLocked(boolean value){
-        touchLocked=value;handler.removeCallbacks(hideControls);scrubbing=false;lockedTapAt=0;touchShield.setVisibility(value?View.VISIBLE:View.GONE);unlockTouchArea.setVisibility(View.GONE);screenLockButton.setVisibility(value?View.GONE:View.VISIBLE);screenLockButton.setAlpha(1f);unlockTouchButton.setAlpha(value?.45f:1f);for(View child:java.util.Arrays.asList(sideLeft==null?null:sideLeft,sideRight==null?null:sideRight)){if(child instanceof ViewGroup){for(int i=0;i<((ViewGroup)child).getChildCount();i++)((ViewGroup)child).getChildAt(i).setEnabled(!value);}}touchLayer.setImportantForAccessibility(value?View.IMPORTANT_FOR_ACCESSIBILITY_NO:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);setChrome(!value);
-        if(value){unlockTouchArea.bringToFront();lockedHint();unlockTouchButton.requestFocus();}else{showJumpFeedback("已解除防误触锁定");playButton.requestFocus();}
+        touchLocked=value;handler.removeCallbacks(hideControls);scrubbing=false;
+        touchShield.setVisibility(value?View.VISIBLE:View.GONE);unlockTouchArea.animate().cancel();unlockTouchArea.setVisibility(View.GONE);
+        screenLockButton.setVisibility(value?View.GONE:View.VISIBLE);unlockTouchButton.setAlpha(value?.45f:1f);
+        touchLayer.setImportantForAccessibility(value?View.IMPORTANT_FOR_ACCESSIBILITY_NO:View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);setChrome(!value);
+        if(value){touchShield.bringToFront();lockedHint();}else{showJumpFeedback("已解除防误触锁定");playButton.requestFocus();}
     }
     private void seekExact(int value){jumpTarget=-1;try{if(media!=null)media.seekTo((long)value);else video.seekTo(value);}catch(IllegalStateException error){toast("视频尚未准备好，请稍后重试");}}
     private void clearLoop(){looping=false;updatePoints();}
