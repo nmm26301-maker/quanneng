@@ -82,7 +82,9 @@ public final class PlayerDisplaySmoke extends Instrumentation {
         });
         awaitPosition(player,650000);
         for(int[] jump:new int[][]{{2400,640000},{2410,650000},{2402,590000},{2412,650000}}){
-            tap(point(player,jump[0]));
+            int[] target=point(player,jump[0]);
+            report("Locked tap at "+target[0]+","+target[1]+" for view "+jump[0]);
+            shellInput("tap "+target[0]+" "+target[1]);
             awaitPosition(player,jump[1]);
         }
         ui(()->check(!player.findViewById(1312).isShown(),"A single tap revealed the lock"));
@@ -103,6 +105,12 @@ public final class PlayerDisplaySmoke extends Instrumentation {
         int[] point=new int[2];view.getLocationOnScreen(point);point[0]+=view.getWidth()/2;point[1]+=view.getHeight()/2;return point;
     }
     private int[] point(Activity player,int id){AtomicReference<int[]> point=new AtomicReference<>();ui(()->point.set(screenCenter(player.findViewById(id))));return point.get();}
+    private void shellInput(String command)throws java.io.IOException{
+        try(ParcelFileDescriptor descriptor=getUiAutomation().executeShellCommand("input "+command);
+            java.io.FileInputStream output=new java.io.FileInputStream(descriptor.getFileDescriptor())){
+            byte[] buffer=new byte[256];while(output.read(buffer)!=-1){}
+        }
+    }
     private void tap(int[] point){long down=SystemClock.uptimeMillis();inject(down,MotionEvent.ACTION_DOWN,point);SystemClock.sleep(45);inject(down,MotionEvent.ACTION_UP,point);}
     private void inject(long down,int action,int[] point){
         MotionEvent event=MotionEvent.obtain(down,SystemClock.uptimeMillis(),action,point[0],point[1],0);
